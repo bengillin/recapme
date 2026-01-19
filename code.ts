@@ -782,10 +782,15 @@ figma.ui.onmessage = async (msg: { type: string; [key: string]: unknown }) => {
       try {
         let productSpec;
 
+        console.log('[RecapMe] Starting design generation...');
+        console.log('[RecapMe] Spec source:', specText ? 'text input' : 'notion URL');
+
         if (specText) {
           // Parse text input into ProductSpec
           figma.ui.postMessage({ type: 'loading', message: 'Parsing product specification...' });
+          console.log('[RecapMe] Parsing text spec, length:', specText.length);
           productSpec = parseTextSpec(specText);
+          console.log('[RecapMe] Parsed spec:', JSON.stringify(productSpec, null, 2));
         } else if (notionSpecUrl) {
           // Check Notion token
           if (!notionToken) {
@@ -802,13 +807,16 @@ figma.ui.onmessage = async (msg: { type: string; [key: string]: unknown }) => {
 
           // Parse the Notion spec
           figma.ui.postMessage({ type: 'loading', message: 'Fetching Notion page...' });
+          console.log('[RecapMe] Fetching Notion page:', notionPageId);
           productSpec = await parseProductSpec(notionToken, notionPageId);
+          console.log('[RecapMe] Parsed Notion spec:', JSON.stringify(productSpec, null, 2));
         } else {
           figma.ui.postMessage({ type: 'error', message: 'Please provide a product specification' });
           break;
         }
 
         if (productSpec.screens.length === 0 && !productSpec.overview) {
+          console.log('[RecapMe] No screens or overview found in spec');
           figma.ui.postMessage({
             type: 'error',
             message: 'Could not parse any screens or content from the specification.',
@@ -816,15 +824,43 @@ figma.ui.onmessage = async (msg: { type: string; [key: string]: unknown }) => {
           break;
         }
 
+        console.log('[RecapMe] Spec has', productSpec.screens.length, 'screens');
+        console.log('[RecapMe] Design system has', designSystemIndex.components.length, 'components');
+
         // Step 2: Generate design schema with Claude
         figma.ui.postMessage({ type: 'loading', message: 'AI is generating design schema...' });
-        let designSchema = await generateDesignSchema(anthropicKey, productSpec, designSystemIndex);
+        console.log('[RecapMe] Calling Claude API...');
+
+        let designSchema;
+        try {
+          designSchema = await generateDesignSchema(anthropicKey, productSpec, designSystemIndex);
+          console.log('[RecapMe] Claude response parsed successfully');
+          console.log('[RecapMe] Design schema:', JSON.stringify(designSchema, null, 2));
+        } catch (claudeError) {
+          console.error('[RecapMe] Claude API error:', claudeError);
+          const errorMsg = claudeError instanceof Error ? claudeError.message : String(claudeError);
+          figma.ui.postMessage({
+            type: 'error',
+            message: `Claude API error: ${errorMsg}`,
+          });
+          // Send debug info to UI
+          figma.ui.postMessage({
+            type: 'debug-info',
+            step: 'claude-api',
+            error: errorMsg,
+            productSpec,
+          });
+          break;
+        }
 
         // Step 3: Map component names to keys and validate
+        console.log('[RecapMe] Mapping component names to keys...');
         designSchema = mapComponentNamesToKeys(designSchema, designSystemIndex);
         const validation = validateSchema(designSchema, designSystemIndex);
+        console.log('[RecapMe] Schema validation:', validation.valid ? 'passed' : 'has warnings');
 
         if (!validation.valid) {
+          console.log('[RecapMe] Validation errors:', validation.errors);
           figma.ui.postMessage({
             type: 'warning',
             message: `Some components not found: ${validation.errors.slice(0, 3).join(', ')}. Placeholders will be used.`,
@@ -833,17 +869,47 @@ figma.ui.onmessage = async (msg: { type: string; [key: string]: unknown }) => {
 
         // Step 4: Generate Figma nodes
         figma.ui.postMessage({ type: 'loading', message: 'Creating design in Figma...' });
-        const result = await generateFromSchema(designSchema);
+        console.log('[RecapMe] Generating Figma nodes...');
 
+        let result;
+        try {
+          result = await generateFromSchema(designSchema);
+          console.log('[RecapMe] Generation result:', result);
+        } catch (figmaError) {
+          console.error('[RecapMe] Figma generation error:', figmaError);
+          const errorMsg = figmaError instanceof Error ? figmaError.message : String(figmaError);
+          figma.ui.postMessage({
+            type: 'error',
+            message: `Figma generation error: ${errorMsg}`,
+          });
+          figma.ui.postMessage({
+            type: 'debug-info',
+            step: 'figma-generation',
+            error: errorMsg,
+            designSchema,
+          });
+          break;
+        }
+
+        console.log('[RecapMe] Generation complete!');
         figma.ui.postMessage({
           type: 'generation-complete',
           result,
           specTitle: productSpec.title,
         });
       } catch (error) {
+        console.error('[RecapMe] Unexpected error:', error);
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        const errorStack = error instanceof Error ? error.stack : undefined;
         figma.ui.postMessage({
           type: 'error',
-          message: error instanceof Error ? error.message : 'Generation failed',
+          message: `Generation failed: ${errorMsg}`,
+        });
+        figma.ui.postMessage({
+          type: 'debug-info',
+          step: 'unknown',
+          error: errorMsg,
+          stack: errorStack,
         });
       }
       break;

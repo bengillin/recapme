@@ -1092,6 +1092,9 @@ A simple login screen for user authentication.
                 Test Generator
               </button>
             </div>
+
+            <!-- Debug Output -->
+            <div id="debug-output" class="hidden"></div>
           </div>
 
           <!-- How It Works -->
@@ -2088,8 +2091,46 @@ A simple login screen for user authentication.
           // Show warning but continue
           console.warn(msg.message);
           break;
+
+        case 'debug-info':
+          // Show debug info in console and optionally in UI
+          console.log('[RecapMe Debug]', msg);
+          showDebugInfo(msg);
+          break;
       }
     };
+
+    // Debug info display
+    function showDebugInfo(info) {
+      console.log('=== RecapMe Debug Info ===');
+      console.log('Step:', info.step);
+      console.log('Error:', info.error);
+      if (info.productSpec) {
+        console.log('Product Spec:', info.productSpec);
+      }
+      if (info.designSchema) {
+        console.log('Design Schema:', info.designSchema);
+      }
+      if (info.stack) {
+        console.log('Stack:', info.stack);
+      }
+
+      // Also show in UI as an expandable section
+      const debugEl = document.getElementById('debug-output');
+      if (debugEl) {
+        debugEl.innerHTML = `
+          <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-top: 16px;">
+            <div style="font-weight: 600; margin-bottom: 8px; color: var(--color-warning);">Debug Info (Step: ${info.step})</div>
+            <div style="font-size: 12px; color: var(--color-danger); margin-bottom: 8px;">${info.error}</div>
+            <details style="font-size: 11px;">
+              <summary style="cursor: pointer; color: var(--text-secondary);">Show details</summary>
+              <pre style="background: var(--bg-input); padding: 8px; border-radius: 4px; overflow-x: auto; margin-top: 8px; font-size: 10px; max-height: 200px; overflow-y: auto;">${JSON.stringify(info, null, 2)}</pre>
+            </details>
+          </div>
+        `;
+        debugEl.classList.remove('hidden');
+      }
+    }
 
     // Tree toggle functionality
     function setupTreeToggles() {

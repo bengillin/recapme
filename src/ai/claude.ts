@@ -50,38 +50,74 @@ async function callClaude(
   systemPrompt: string,
   maxTokens: number = 4096
 ): Promise<string> {
-  const response = await fetch(ANTHROPIC_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages,
-    }),
-  });
+  console.log('[RecapMe:Claude] Making API request to:', ANTHROPIC_API_URL);
+  console.log('[RecapMe:Claude] Model:', MODEL);
+  console.log('[RecapMe:Claude] Max tokens:', maxTokens);
+
+  let response: Response;
+  try {
+    response = await fetch(ANTHROPIC_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages,
+      }),
+    });
+    console.log('[RecapMe:Claude] Response status:', response.status, response.statusText);
+  } catch (fetchError) {
+    console.error('[RecapMe:Claude] Fetch error:', fetchError);
+    throw new ClaudeAPIError(
+      `Network error: ${fetchError instanceof Error ? fetchError.message : 'Failed to connect'}`,
+      0
+    );
+  }
 
   if (!response.ok) {
+    let errorData: { error?: { message?: string; type?: string } } = {};
+    try {
+      errorData = await response.json();
+      console.error('[RecapMe:Claude] Error response:', errorData);
+    } catch {
+      console.error('[RecapMe:Claude] Could not parse error response');
+    }
+
     if (response.status === 401) {
       throw new ClaudeAPIError('Invalid Anthropic API key', 401);
     }
     if (response.status === 429) {
       throw new ClaudeAPIError('Rate limited. Please try again later.', 429);
     }
-    const errorData = await response.json().catch(() => ({}));
+    if (response.status === 400) {
+      throw new ClaudeAPIError(
+        `Bad request: ${errorData.error?.message || response.statusText}`,
+        400
+      );
+    }
     throw new ClaudeAPIError(
       errorData.error?.message || `API error: ${response.statusText}`,
       response.status
     );
   }
 
-  const data: ClaudeResponse = await response.json();
+  let data: ClaudeResponse;
+  try {
+    data = await response.json();
+    console.log('[RecapMe:Claude] Response parsed, usage:', data.usage);
+    console.log('[RecapMe:Claude] Stop reason:', data.stop_reason);
+  } catch (parseError) {
+    console.error('[RecapMe:Claude] Failed to parse response JSON:', parseError);
+    throw new ClaudeAPIError('Failed to parse API response');
+  }
 
   if (!data.content || data.content.length === 0) {
+    console.error('[RecapMe:Claude] Empty content in response:', data);
     throw new ClaudeAPIError('Empty response from Claude');
   }
 
@@ -197,6 +233,9 @@ export async function generateDesignSchema(
   const designSystemSummary = summarizeDesignSystem(designSystem);
   const specSummary = summarizeProductSpec(spec);
 
+  console.log('[RecapMe:Claude] Design system summary length:', designSystemSummary.length);
+  console.log('[RecapMe:Claude] Spec summary length:', specSummary.length);
+
   const userMessage = `Generate a design schema for the following product specification using the available design system components.
 
 DESIGN SYSTEM:
@@ -209,27 +248,53 @@ Generate a JSON design schema that implements ALL the screens mentioned in the s
 
 Return ONLY the JSON object, no explanation or markdown.`;
 
-  const response = await callClaude(
-    apiKey,
-    [{ role: 'user', content: userMessage }],
-    systemPrompt
-  );
+  console.log('[RecapMe:Claude] Sending request to Claude API...');
+  console.log('[RecapMe:Claude] User message length:', userMessage.length);
+
+  let response: string;
+  try {
+    response = await callClaude(
+      apiKey,
+      [{ role: 'user', content: userMessage }],
+      systemPrompt
+    );
+    console.log('[RecapMe:Claude] Raw response length:', response.length);
+    console.log('[RecapMe:Claude] Raw response (first 500 chars):', response.substring(0, 500));
+    console.log('[RecapMe:Claude] Raw response (last 200 chars):', response.substring(response.length - 200));
+  } catch (apiError) {
+    console.error('[RecapMe:Claude] API call failed:', apiError);
+    throw apiError;
+  }
 
   // Parse the JSON response
   try {
     // Try to extract JSON from the response (in case there's extra text)
+    console.log('[RecapMe:Claude] Attempting to extract JSON from response...');
     const jsonMatch = response.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
+      console.error('[RecapMe:Claude] No JSON found in response');
+      console.error('[RecapMe:Claude] Full response:', response);
       throw new Error('No JSON found in response');
     }
 
-    const schema = JSON.parse(jsonMatch[0]) as DesignSchema;
+    console.log('[RecapMe:Claude] JSON extracted, length:', jsonMatch[0].length);
+
+    let schema: DesignSchema;
+    try {
+      schema = JSON.parse(jsonMatch[0]) as DesignSchema;
+    } catch (parseError) {
+      console.error('[RecapMe:Claude] JSON parse error:', parseError);
+      console.error('[RecapMe:Claude] Attempted to parse:', jsonMatch[0].substring(0, 500));
+      throw new Error(`JSON parse error: ${parseError instanceof Error ? parseError.message : 'Unknown'}`);
+    }
 
     // Validate basic structure
     if (!schema.screens || !Array.isArray(schema.screens)) {
+      console.error('[RecapMe:Claude] Invalid schema structure:', schema);
       throw new Error('Invalid schema: missing screens array');
     }
 
+    console.log('[RecapMe:Claude] Schema parsed successfully with', schema.screens.length, 'screens');
     return schema;
   } catch (error) {
     throw new ClaudeAPIError(
