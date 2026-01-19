@@ -7,8 +7,25 @@ import type { DesignSchema, DesignSystemIndex, ProductSpec } from '../types';
 import { summarizeDesignSystem } from '../design-system/indexer';
 import { summarizeProductSpec } from '../integrations/notion';
 
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+// Default to direct Anthropic API, but can be overridden with a proxy URL
+let ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const MODEL = 'claude-sonnet-4-20250514';
+
+/**
+ * Set a custom proxy URL for the Anthropic API
+ * Use this to bypass CORS restrictions in browser environments
+ */
+export function setProxyUrl(url: string): void {
+  ANTHROPIC_API_URL = url;
+  console.log('[RecapMe:Claude] Using proxy URL:', url);
+}
+
+/**
+ * Get the current API URL
+ */
+export function getApiUrl(): string {
+  return ANTHROPIC_API_URL;
+}
 
 export class ClaudeAPIError extends Error {
   constructor(

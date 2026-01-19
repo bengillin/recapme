@@ -17,7 +17,8 @@
       "https://api.notion.com",
       "https://hooks.slack.com",
       "https://api.anthropic.com",
-      "https://*.anthropic.com"
+      "https://*.anthropic.com",
+      "https://*.workers.dev"
     ]
   }
 }

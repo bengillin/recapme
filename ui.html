@@ -1239,6 +1239,19 @@ A simple login screen for user authentication.
             <div id="anthropic-key-saved" class="hidden">
               <button class="btn btn-link btn-sm" onclick="clearAnthropicKey()">Disconnect</button>
             </div>
+
+            <!-- Proxy URL (for CORS bypass) -->
+            <div class="form-group" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+              <label>Proxy URL <span style="font-weight: normal; color: var(--text-secondary);">(optional)</span></label>
+              <input type="text" id="anthropic-proxy" placeholder="https://your-worker.workers.dev">
+              <p class="hint">
+                Required for Figma plugins due to CORS. Deploy the included
+                <code style="background: var(--bg-input); padding: 2px 4px; border-radius: 3px;">cloudflare-worker.js</code>
+                to <a href="https://workers.cloudflare.com/" target="_blank">Cloudflare Workers</a> (free).
+              </p>
+              <button class="btn btn-sm btn-secondary" style="margin-top: 8px" onclick="saveAnthropicProxy()">Save Proxy URL</button>
+              <span id="proxy-status" style="margin-left: 8px; font-size: 12px;"></span>
+            </div>
           </div>
         </div>
       </div>
@@ -1661,6 +1674,21 @@ A simple login screen for user authentication.
       updateAnthropicStatus(false);
     }
 
+    function saveAnthropicProxy() {
+      const proxyUrl = document.getElementById('anthropic-proxy').value.trim();
+      parent.postMessage({ pluginMessage: { type: 'save-anthropic-proxy', proxyUrl } }, '*');
+    }
+
+    function updateProxyStatus(saved, url) {
+      const statusEl = document.getElementById('proxy-status');
+      if (saved && url) {
+        statusEl.textContent = 'Saved';
+        statusEl.style.color = 'var(--color-success)';
+      } else {
+        statusEl.textContent = '';
+      }
+    }
+
     function setSpecSource(source) {
       specSource = source;
       const textInput = document.getElementById('spec-text-input');
@@ -1917,6 +1945,10 @@ A simple login screen for user authentication.
             // Re-index to verify
             designSystemIndexed = true;
           }
+          if (msg.anthropicProxy) {
+            document.getElementById('anthropic-proxy').value = msg.anthropicProxy;
+            updateProxyStatus(true, msg.anthropicProxy);
+          }
           break;
 
         case 'figma-token-saved':
@@ -2064,6 +2096,15 @@ A simple login screen for user authentication.
 
         case 'anthropic-key-cleared':
           updateAnthropicStatus(false);
+          break;
+
+        case 'anthropic-proxy-saved':
+          updateProxyStatus(true, document.getElementById('anthropic-proxy').value);
+          showSuccess('Proxy URL saved! Try "Test Network" to verify.');
+          break;
+
+        case 'anthropic-proxy-cleared':
+          updateProxyStatus(false, null);
           break;
 
         case 'design-system-file-saved':

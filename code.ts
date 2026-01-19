@@ -49,7 +49,7 @@ import {
 } from './src/integrations/slack';
 import type { DiffResult, DesignSystemIndex, ProductSpec, ScreenSpec } from './src/types';
 import { indexDesignSystem } from './src/design-system/indexer';
-import { generateDesignSchema, validateAnthropicKey, validateSchema, mapComponentNamesToKeys } from './src/ai/claude';
+import { generateDesignSchema, validateAnthropicKey, validateSchema, mapComponentNamesToKeys, setProxyUrl, getApiUrl } from './src/ai/claude';
 import { generateFromSchema, generateTestFrame } from './src/generator/figma-generator';
 
 /**
@@ -181,6 +181,7 @@ const STORAGE_KEY_NOTION_TOKEN = 'recapme_notion_token';
 const STORAGE_KEY_SLACK_WEBHOOK = 'recapme_slack_webhook';
 const STORAGE_KEY_LINEAR_TEAM = 'recapme_linear_team';
 const STORAGE_KEY_ANTHROPIC_KEY = 'recapme_anthropic_key';
+const STORAGE_KEY_ANTHROPIC_PROXY = 'recapme_anthropic_proxy';
 const STORAGE_KEY_DESIGN_SYSTEM_FILE = 'recapme_design_system_file';
 const STORAGE_KEY_DESIGN_SYSTEM_INDEX = 'recapme_design_system_index';
 
@@ -194,15 +195,21 @@ figma.showUI(__html__, {
 // Initialize the plugin
 async function initialize() {
   const fileKey = figma.fileKey;
-  const [figmaToken, linearToken, notionToken, slackWebhook, linearTeam, anthropicKey, designSystemFile] = await Promise.all([
+  const [figmaToken, linearToken, notionToken, slackWebhook, linearTeam, anthropicKey, anthropicProxy, designSystemFile] = await Promise.all([
     figma.clientStorage.getAsync(STORAGE_KEY_FIGMA_TOKEN),
     figma.clientStorage.getAsync(STORAGE_KEY_LINEAR_TOKEN),
     figma.clientStorage.getAsync(STORAGE_KEY_NOTION_TOKEN),
     figma.clientStorage.getAsync(STORAGE_KEY_SLACK_WEBHOOK),
     figma.clientStorage.getAsync(STORAGE_KEY_LINEAR_TEAM),
     figma.clientStorage.getAsync(STORAGE_KEY_ANTHROPIC_KEY),
+    figma.clientStorage.getAsync(STORAGE_KEY_ANTHROPIC_PROXY),
     figma.clientStorage.getAsync(STORAGE_KEY_DESIGN_SYSTEM_FILE),
   ]);
+
+  // Set proxy URL if configured
+  if (anthropicProxy) {
+    setProxyUrl(anthropicProxy);
+  }
 
   figma.ui.postMessage({
     type: 'init',
@@ -212,6 +219,7 @@ async function initialize() {
     hasNotionToken: !!notionToken,
     hasSlackWebhook: !!slackWebhook,
     hasAnthropicKey: !!anthropicKey,
+    anthropicProxy: anthropicProxy || null,
     linearTeam: linearTeam || null,
     figmaToken: figmaToken || null,
     linearToken: linearToken || null,
@@ -691,6 +699,20 @@ figma.ui.onmessage = async (msg: { type: string; [key: string]: unknown }) => {
       break;
     }
 
+    case 'save-anthropic-proxy': {
+      const proxyUrl = msg.proxyUrl as string;
+      if (proxyUrl) {
+        await figma.clientStorage.setAsync(STORAGE_KEY_ANTHROPIC_PROXY, proxyUrl);
+        setProxyUrl(proxyUrl);
+        figma.ui.postMessage({ type: 'anthropic-proxy-saved' });
+      } else {
+        await figma.clientStorage.deleteAsync(STORAGE_KEY_ANTHROPIC_PROXY);
+        setProxyUrl('https://api.anthropic.com/v1/messages');
+        figma.ui.postMessage({ type: 'anthropic-proxy-cleared' });
+      }
+      break;
+    }
+
     case 'save-design-system-file': {
       const fileUrl = msg.fileUrl as string;
       // Extract file key from URL
@@ -932,10 +954,18 @@ figma.ui.onmessage = async (msg: { type: string; [key: string]: unknown }) => {
       // Test if we can reach the Anthropic API at all
       console.log('[RecapMe] Testing network connectivity...');
 
+      const currentApiUrl = getApiUrl();
+      const isUsingProxy = currentApiUrl !== 'https://api.anthropic.com/v1/messages';
+
       const domains = [
         { name: 'Figma API', url: 'https://api.figma.com/v1/me' },
-        { name: 'Anthropic API', url: 'https://api.anthropic.com/v1/messages' },
+        { name: isUsingProxy ? 'Proxy URL' : 'Anthropic API (direct)', url: currentApiUrl },
       ];
+
+      if (isUsingProxy) {
+        // Also test direct Anthropic to confirm it's blocked
+        domains.push({ name: 'Anthropic API (direct)', url: 'https://api.anthropic.com/v1/messages' });
+      }
 
       const results: { name: string; status: string; error?: string }[] = [];
 
