@@ -1,0 +1,1803 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>RecapMe</title>
+  <style>
+    /* CSS Variables - high-contrast for accessibility */
+    :root {
+      --bg-primary: #2c2c2c;
+      --bg-secondary: #3d3d3d;
+      --bg-tertiary: #4a4a4a;
+      --bg-input: #1e1e1e;
+      --text-primary: #ffffff;
+      --text-secondary: #b3b3b3;
+      --text-tertiary: #999999;
+      --text-placeholder: #888888;
+      --border-color: #555555;
+      --border-focus: #0d99ff;
+      --brand-primary: #0d99ff;
+      --brand-hover: #3db8ff;
+      --text-on-brand: #ffffff;
+      --color-success: #4ade80;
+      --color-danger: #f87171;
+      --color-warning: #fbbf24;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 13px;
+      color: var(--text-primary);
+      background: var(--bg-primary);
+      line-height: 1.5;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border-color);
+      flex-shrink: 0;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-primary);
+    }
+
+    .header h1 .logo {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, #0d99ff 0%, #7b61ff 100%);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    .header p {
+      color: var(--text-secondary);
+      font-size: 13px;
+      margin-top: 4px;
+    }
+
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .footer {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border-color);
+      flex-shrink: 0;
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 16px;
+    }
+
+    .tab {
+      padding: 10px 16px;
+      border: none;
+      background: none;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .tab:hover {
+      color: var(--text-primary);
+    }
+
+    .tab.active {
+      color: var(--brand-primary);
+      border-bottom-color: var(--brand-primary);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Form elements */
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+    }
+
+    .form-group .hint {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+    }
+
+    .form-group .hint a {
+      color: var(--brand-primary);
+      text-decoration: underline;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    input[type="date"],
+    select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      font-size: 14px;
+      background: var(--bg-input);
+      color: var(--text-primary);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 2px rgba(13, 153, 255, 0.3);
+    }
+
+    input::placeholder { color: var(--text-placeholder); }
+    input[type="date"] { color-scheme: dark; }
+
+    .date-row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .date-row .form-group { flex: 1; }
+
+    /* Buttons */
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: var(--brand-primary);
+      color: var(--text-on-brand);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--brand-hover);
+    }
+
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: var(--bg-secondary);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-sm {
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+
+    .btn-link {
+      background: none;
+      color: var(--brand-primary);
+      padding: 4px;
+      font-weight: 500;
+      border: none;
+    }
+
+    /* Sections */
+    .section {
+      background: var(--bg-secondary);
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      border: 1px solid var(--border-color);
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .token-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+    }
+
+    .token-status .indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .token-status .indicator.connected { background: var(--color-success); }
+    .token-status .indicator.disconnected { background: var(--color-danger); }
+
+    /* Presets */
+    .preset-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    .preset-btn {
+      padding: 8px 14px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .preset-btn:hover {
+      border-color: var(--brand-primary);
+      background: var(--bg-tertiary);
+    }
+
+    /* Checkbox */
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--brand-primary);
+    }
+
+    .checkbox-group label {
+      font-size: 14px;
+      margin-bottom: 0;
+    }
+
+    /* Loading */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 24px;
+      text-align: center;
+    }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid var(--bg-tertiary);
+      border-top-color: var(--brand-primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 16px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    /* Error */
+    .error {
+      background: rgba(248, 113, 113, 0.15);
+      border: 1px solid var(--color-danger);
+      color: var(--color-danger);
+      padding: 14px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    /* Success */
+    .success {
+      background: rgba(74, 222, 128, 0.15);
+      border: 1px solid var(--color-success);
+      color: var(--color-success);
+      padding: 14px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+
+    /* Results */
+    .results-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 16px;
+      background: var(--bg-secondary);
+      padding: 4px;
+      border-radius: 8px;
+    }
+
+    .results-tab {
+      flex: 1;
+      padding: 8px 12px;
+      border: none;
+      background: none;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+
+    .results-tab:hover {
+      color: var(--text-primary);
+    }
+
+    .results-tab.active {
+      background: var(--brand-primary);
+      color: var(--text-on-brand);
+    }
+
+    .results-content {
+      display: none;
+    }
+
+    .results-content.active {
+      display: block;
+    }
+
+    /* Report styles */
+    .stakeholder-report, .engineer-report {
+      color: var(--text-primary);
+    }
+
+    .report-header h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    .summary-card {
+      background: var(--bg-secondary);
+      padding: 14px;
+      border-radius: 8px;
+      text-align: center;
+      border: 1px solid var(--border-color);
+    }
+
+    .card-value {
+      font-size: 24px;
+      font-weight: 700;
+      display: block;
+    }
+
+    .card-label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+    }
+
+    .summary-card.status-on-track .card-value { color: var(--color-success); }
+    .summary-card.status-at-risk .card-value { color: var(--color-warning); }
+    .summary-card.status-blocked .card-value { color: var(--color-danger); }
+
+    .features-list h3, .section h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 16px 0 12px;
+      color: var(--text-primary);
+    }
+
+    .feature-card {
+      background: var(--bg-secondary);
+      padding: 14px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      border: 1px solid var(--border-color);
+    }
+
+    .feature-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .feature-name {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .feature-status {
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .feature-progress {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .progress-bar {
+      flex: 1;
+      height: 6px;
+      background: var(--bg-tertiary);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s;
+    }
+
+    .progress-text {
+      font-size: 12px;
+      color: var(--text-secondary);
+      min-width: 35px;
+    }
+
+    .feature-summary {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .linked-ticket {
+      display: inline-block;
+      font-size: 12px;
+      color: var(--brand-primary);
+      margin-bottom: 8px;
+    }
+
+    .key-changes, .impl-hints, .missing-items {
+      margin: 8px 0;
+      padding-left: 20px;
+    }
+
+    .key-changes li, .impl-hints li, .missing-items li {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .readiness-checklist {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .readiness-checklist span {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: var(--bg-tertiary);
+    }
+
+    .readiness-checklist .check {
+      background: rgba(74, 222, 128, 0.2);
+      color: var(--color-success);
+    }
+
+    .readiness-checklist .missing {
+      background: rgba(248, 113, 113, 0.2);
+      color: var(--color-danger);
+    }
+
+    .component-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 10px;
+    }
+
+    .component-table th, .component-table td {
+      padding: 8px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .component-table th {
+      background: var(--bg-tertiary);
+      font-weight: 600;
+    }
+
+    .highlights ul, .blockers ul {
+      padding-left: 20px;
+      margin: 8px 0;
+    }
+
+    .highlights li, .blockers li {
+      margin-bottom: 6px;
+      color: var(--text-secondary);
+    }
+
+    /* Report type options */
+    .report-type-options {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .report-type-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .report-type-option:hover {
+      border-color: var(--brand-primary);
+    }
+
+    .report-type-option:has(input:checked) {
+      border-color: var(--brand-primary);
+      background: rgba(13, 153, 255, 0.1);
+    }
+
+    .report-type-option input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      margin-top: 2px;
+      accent-color: var(--brand-primary);
+    }
+
+    .report-type-content {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .report-type-name {
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .report-type-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* Structure View Styles */
+    .structure-report .page-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    .page-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .page-card .page-name {
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 2px;
+    }
+
+    .page-card .page-path {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-bottom: 8px;
+      word-break: break-all;
+    }
+
+    .page-card .page-stats {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .change-bar {
+      height: 4px;
+      background: var(--bg-tertiary);
+      border-radius: 2px;
+      display: flex;
+      overflow: hidden;
+      margin-bottom: 4px;
+    }
+
+    .bar-added { background: var(--color-success); }
+    .bar-modified { background: var(--color-warning); }
+    .bar-removed { background: var(--color-danger); }
+
+    .change-legend {
+      display: flex;
+      gap: 12px;
+      font-size: 11px;
+    }
+
+    .legend-added { color: var(--color-success); }
+    .legend-modified { color: var(--color-warning); }
+    .legend-removed { color: var(--color-danger); }
+
+    /* Tree View */
+    .tree-view {
+      margin-top: 16px;
+    }
+
+    .tree-node {
+      font-size: 12px;
+    }
+
+    .tree-node-header {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 0;
+      cursor: pointer;
+    }
+
+    .tree-node-header:hover {
+      background: var(--bg-secondary);
+      border-radius: 4px;
+    }
+
+    .tree-toggle {
+      width: 16px;
+      font-size: 10px;
+      color: var(--text-tertiary);
+      transition: transform 0.2s;
+    }
+
+    .tree-node.expanded > .tree-node-header .tree-toggle {
+      transform: rotate(90deg);
+    }
+
+    .tree-spacer { width: 16px; }
+
+    .tree-icon {
+      font-size: 12px;
+      width: 16px;
+      text-align: center;
+    }
+
+    .tree-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .tree-stats {
+      display: flex;
+      gap: 6px;
+      font-size: 10px;
+    }
+
+    .tree-stats .stat-added { color: var(--color-success); }
+    .tree-stats .stat-modified { color: var(--color-warning); }
+    .tree-stats .stat-removed { color: var(--color-danger); }
+
+    /* Component View */
+    .component-report .component-groups {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .component-group {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .component-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .component-header h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .component-stats {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+
+    .component-stats .badge {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .badge-added { background: rgba(74, 222, 128, 0.2); color: var(--color-success); }
+    .badge-modified { background: rgba(251, 191, 36, 0.2); color: var(--color-warning); }
+    .badge-removed { background: rgba(248, 113, 113, 0.2); color: var(--color-danger); }
+
+    .component-path {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-bottom: 10px;
+      word-break: break-all;
+    }
+
+    .variant-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .variant-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: var(--bg-tertiary);
+    }
+
+    .variant-item.variant-added { border-left: 2px solid var(--color-success); }
+    .variant-item.variant-modified { border-left: 2px solid var(--color-warning); }
+    .variant-item.variant-removed { border-left: 2px solid var(--color-danger); }
+
+    .variant-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .variant-change {
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .variant-added .variant-change { color: var(--color-success); }
+    .variant-modified .variant-change { color: var(--color-warning); }
+    .variant-removed .variant-change { color: var(--color-danger); }
+
+    .variant-summary {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      padding: 6px 8px;
+      background: var(--bg-tertiary);
+      border-radius: 4px;
+    }
+
+    .variant-type {
+      font-weight: 600;
+    }
+
+    .variant-count {
+      color: var(--text-secondary);
+    }
+
+    .variant-breakdown {
+      margin-left: auto;
+      display: flex;
+      gap: 6px;
+    }
+
+    .variant-breakdown .added { color: var(--color-success); }
+    .variant-breakdown .modified { color: var(--color-warning); }
+    .variant-breakdown .removed { color: var(--color-danger); }
+
+    /* Hidden class */
+    .hidden { display: none !important; }
+
+    /* Export options */
+    .export-options {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* Notion modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal {
+      background: var(--bg-primary);
+      border-radius: 12px;
+      padding: 24px;
+      width: 90%;
+      max-width: 400px;
+      border: 1px solid var(--border-color);
+    }
+
+    .modal h3 {
+      margin-bottom: 16px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>
+        <span class="logo">R</span>
+        RecapMe
+      </h1>
+      <p>Intelligent design progress tracking</p>
+    </header>
+
+    <main class="content">
+      <div id="error" class="error hidden"></div>
+      <div id="success" class="success hidden"></div>
+
+      <!-- Setup View -->
+      <div id="setup-view">
+        <!-- Tabs for setup sections -->
+        <div class="tabs">
+          <button class="tab active" data-tab="config">Configuration</button>
+          <button class="tab" data-tab="integrations">Integrations</button>
+        </div>
+
+        <!-- Config Tab -->
+        <div id="config-tab" class="tab-content active">
+          <!-- File URLs -->
+          <div id="file-key-section" class="form-group">
+            <label>Figma File URL</label>
+            <input type="text" id="file-url" placeholder="https://www.figma.com/design/ABC123...">
+            <p class="hint">Auto-detected when running inside a file, or paste URL here</p>
+          </div>
+
+          <div class="form-group">
+            <label>Notion Spec URL <span style="color: var(--text-tertiary)">(optional)</span></label>
+            <input type="text" id="notion-spec-url" placeholder="https://www.notion.so/your-page-id...">
+            <p class="hint">Link to product spec or requirements doc for context</p>
+          </div>
+
+          <!-- Date Selection -->
+          <div class="form-group">
+            <label>Time Period</label>
+            <div class="preset-buttons">
+              <button class="preset-btn" onclick="setPreset('7d')">Last 7 days</button>
+              <button class="preset-btn" onclick="setPreset('14d')">Last 2 weeks</button>
+              <button class="preset-btn" onclick="setPreset('30d')">Last 30 days</button>
+              <button class="preset-btn" onclick="setPreset('90d')">Quarter</button>
+            </div>
+          </div>
+
+          <div class="date-row">
+            <div class="form-group">
+              <label>From</label>
+              <input type="date" id="start-date">
+            </div>
+            <div class="form-group">
+              <label>To</label>
+              <input type="date" id="end-date">
+            </div>
+          </div>
+
+          <!-- Report Types -->
+          <div class="form-group">
+            <label>Report Types</label>
+            <div class="report-type-options">
+              <label class="report-type-option">
+                <input type="checkbox" id="report-structure" checked>
+                <div class="report-type-content">
+                  <span class="report-type-name">📁 File Structure</span>
+                  <span class="report-type-desc">Changes organized by document location</span>
+                </div>
+              </label>
+              <label class="report-type-option">
+                <input type="checkbox" id="report-components" checked>
+                <div class="report-type-content">
+                  <span class="report-type-name">🧩 Components</span>
+                  <span class="report-type-desc">Component sets & variant changes</span>
+                </div>
+              </label>
+              <label class="report-type-option">
+                <input type="checkbox" id="report-stakeholder">
+                <div class="report-type-content">
+                  <span class="report-type-name">📊 Stakeholder Summary</span>
+                  <span class="report-type-desc">Progress overview for PMs & leadership</span>
+                </div>
+              </label>
+              <label class="report-type-option">
+                <input type="checkbox" id="report-engineer">
+                <div class="report-type-content">
+                  <span class="report-type-name">🔧 Engineer Handoff</span>
+                  <span class="report-type-desc">Technical readiness & implementation notes</span>
+                </div>
+              </label>
+              <label class="report-type-option">
+                <input type="checkbox" id="report-diff">
+                <div class="report-type-content">
+                  <span class="report-type-name">📄 Raw Diff</span>
+                  <span class="report-type-desc">Complete list of all changes</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Linear Integration Toggle -->
+          <div id="linear-options" class="form-group hidden">
+            <div class="checkbox-group" style="margin-top: 0">
+              <input type="checkbox" id="include-linear">
+              <label for="include-linear">Include Linear ticket matching</label>
+            </div>
+
+            <div id="linear-team-select" class="form-group hidden" style="margin-top: 12px; margin-bottom: 0">
+              <label>Linear Team</label>
+              <select id="linear-team">
+                <option value="">Select a team...</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Integrations Tab -->
+        <div id="integrations-tab" class="tab-content">
+          <!-- Figma -->
+          <div class="section">
+            <div class="section-title">
+              <span>Figma</span>
+              <div id="figma-status" class="token-status">
+                <span class="indicator disconnected"></span>
+                <span>Not connected</span>
+              </div>
+            </div>
+            <div id="figma-token-input" class="form-group">
+              <input type="password" id="figma-token" placeholder="figd_xxxx...">
+              <p class="hint">
+                <a href="https://www.figma.com/developers/api#access-tokens" target="_blank">
+                  Get your Personal Access Token
+                </a>
+              </p>
+              <button class="btn btn-sm btn-secondary" style="margin-top: 8px" onclick="saveFigmaToken()">Connect Figma</button>
+            </div>
+            <div id="figma-token-saved" class="hidden">
+              <button class="btn btn-link btn-sm" onclick="clearFigmaToken()">Disconnect</button>
+            </div>
+          </div>
+
+          <!-- Linear -->
+          <div class="section">
+            <div class="section-title">
+              <span>Linear</span>
+              <div id="linear-status" class="token-status">
+                <span class="indicator disconnected"></span>
+                <span>Not connected</span>
+              </div>
+            </div>
+            <div id="linear-token-input" class="form-group">
+              <input type="password" id="linear-token" placeholder="lin_api_xxxx...">
+              <p class="hint">
+                <a href="https://linear.app/settings/api" target="_blank">
+                  Get your Linear API key
+                </a>
+              </p>
+              <button class="btn btn-sm btn-secondary" style="margin-top: 8px" onclick="saveLinearToken()">Connect Linear</button>
+            </div>
+            <div id="linear-token-saved" class="hidden">
+              <button class="btn btn-link btn-sm" onclick="clearLinearToken()">Disconnect</button>
+            </div>
+          </div>
+
+          <!-- Notion -->
+          <div class="section">
+            <div class="section-title">
+              <span>Notion</span>
+              <div id="notion-status" class="token-status">
+                <span class="indicator disconnected"></span>
+                <span>Not connected</span>
+              </div>
+            </div>
+            <div id="notion-token-input" class="form-group">
+              <input type="password" id="notion-token" placeholder="secret_xxxx...">
+              <p class="hint">
+                <a href="https://www.notion.so/my-integrations" target="_blank">
+                  Create a Notion integration
+                </a>
+              </p>
+              <button class="btn btn-sm btn-secondary" style="margin-top: 8px" onclick="saveNotionToken()">Connect Notion</button>
+            </div>
+            <div id="notion-token-saved" class="hidden">
+              <button class="btn btn-link btn-sm" onclick="clearNotionToken()">Disconnect</button>
+            </div>
+          </div>
+
+          <!-- Slack -->
+          <div class="section">
+            <div class="section-title">
+              <span>Slack</span>
+              <div id="slack-status" class="token-status">
+                <span class="indicator disconnected"></span>
+                <span>Not connected</span>
+              </div>
+            </div>
+            <div id="slack-webhook-input" class="form-group">
+              <input type="text" id="slack-webhook" placeholder="https://hooks.slack.com/services/...">
+              <p class="hint">
+                <a href="https://api.slack.com/messaging/webhooks" target="_blank">
+                  Create an Incoming Webhook
+                </a>
+              </p>
+              <button class="btn btn-sm btn-secondary" style="margin-top: 8px" onclick="saveSlackWebhook()">Connect Slack</button>
+            </div>
+            <div id="slack-webhook-saved" class="hidden">
+              <button class="btn btn-link btn-sm" onclick="clearSlackWebhook()">Disconnect</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading View -->
+      <div id="loading-view" class="hidden">
+        <div class="loading">
+          <div class="spinner"></div>
+          <span id="loading-text" class="loading-text">Loading...</span>
+        </div>
+      </div>
+
+      <!-- Results View -->
+      <div id="results-view" class="hidden">
+        <div class="results-tabs">
+          <button class="results-tab" data-results="structure">Structure</button>
+          <button class="results-tab" data-results="components">Components</button>
+          <button class="results-tab" data-results="stakeholder">Stakeholder</button>
+          <button class="results-tab" data-results="engineer">Engineer</button>
+          <button class="results-tab" data-results="raw">Raw Diff</button>
+        </div>
+
+        <div id="structure-content" class="results-content"></div>
+        <div id="components-content" class="results-content"></div>
+        <div id="stakeholder-content" class="results-content"></div>
+        <div id="engineer-content" class="results-content"></div>
+        <div id="raw-content" class="results-content"></div>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div id="setup-footer">
+        <button id="generate-btn" class="btn btn-primary" onclick="generateRecap()">
+          Generate Recap
+        </button>
+      </div>
+      <div id="results-footer" class="hidden">
+        <button class="btn btn-secondary" onclick="showSetup()">← Back</button>
+        <div class="export-options">
+          <button class="btn btn-primary btn-sm export-structure hidden" onclick="exportMarkdown('structure')">📄 Export Summary</button>
+          <button class="btn btn-secondary btn-sm export-raw hidden" onclick="exportMarkdown('raw')">Export Raw</button>
+          <button class="btn btn-secondary btn-sm export-stakeholder hidden" onclick="exportMarkdown('stakeholder')">Export Stakeholder</button>
+          <button class="btn btn-secondary btn-sm export-engineer hidden" onclick="exportMarkdown('engineer')">Export Engineer</button>
+          <button id="slack-share-btn" class="btn btn-secondary btn-sm hidden" onclick="shareToSlack()">
+            Share to Slack
+          </button>
+          <button id="notion-export-btn" class="btn btn-primary btn-sm hidden" onclick="showNotionModal()">
+            Export to Notion
+          </button>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Notion Export Modal -->
+  <div id="notion-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <h3>Export to Notion</h3>
+      <div class="form-group">
+        <label>Parent Page</label>
+        <select id="notion-parent-page">
+          <option value="">Select a page...</option>
+        </select>
+        <p class="hint">The recap will be created as a child of this page</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="hideNotionModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="exportToNotion()">Create Page</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slack Copy Modal -->
+  <div id="slack-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <h3>Share to Slack</h3>
+      <p id="slack-modal-message" class="hint" style="margin-bottom: 12px;"></p>
+      <div class="form-group">
+        <textarea id="slack-copy-text" readonly rows="10" style="width: 100%; font-family: monospace; font-size: 12px; resize: vertical;"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="hideSlackModal()">Close</button>
+        <button class="btn btn-primary" onclick="copySlackText()">Copy to Clipboard</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let currentData = null;
+    let detectedFileKey = null;
+    let hasFigmaToken = false;
+    let hasLinearToken = false;
+    let hasNotionToken = false;
+    let linearTeams = [];
+
+    // DOM elements
+    const errorEl = document.getElementById('error');
+    const successEl = document.getElementById('success');
+    const setupView = document.getElementById('setup-view');
+    const loadingView = document.getElementById('loading-view');
+    const resultsView = document.getElementById('results-view');
+    const loadingText = document.getElementById('loading-text');
+    const setupFooter = document.getElementById('setup-footer');
+    const resultsFooter = document.getElementById('results-footer');
+
+    // Initialize dates
+    function initDates() {
+      const today = new Date();
+      const weekAgo = new Date(today);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      document.getElementById('start-date').value = formatDateForInput(weekAgo);
+      document.getElementById('end-date').value = formatDateForInput(today);
+    }
+
+    function formatDateForInput(date) {
+      return date.toISOString().split('T')[0];
+    }
+
+    function setPreset(preset) {
+      const today = new Date();
+      const startDate = new Date(today);
+      switch (preset) {
+        case '7d': startDate.setDate(startDate.getDate() - 7); break;
+        case '14d': startDate.setDate(startDate.getDate() - 14); break;
+        case '30d': startDate.setDate(startDate.getDate() - 30); break;
+        case '90d': startDate.setDate(startDate.getDate() - 90); break;
+      }
+      document.getElementById('start-date').value = formatDateForInput(startDate);
+      document.getElementById('end-date').value = formatDateForInput(today);
+    }
+
+    // Tabs
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.tab + '-tab').classList.add('active');
+      });
+    });
+
+    document.querySelectorAll('.results-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.results-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.results-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.results + '-content').classList.add('active');
+      });
+    });
+
+    // Report type toggles - show Linear options when Stakeholder or Engineer selected
+    function updateLinearVisibility() {
+      const stakeholder = document.getElementById('report-stakeholder').checked;
+      const engineer = document.getElementById('report-engineer').checked;
+      const linearOptions = document.getElementById('linear-options');
+      
+      if (stakeholder || engineer) {
+        linearOptions.classList.remove('hidden');
+      } else {
+        linearOptions.classList.add('hidden');
+      }
+    }
+
+    // Listen to all report type checkboxes that affect Linear visibility
+    document.getElementById('report-stakeholder').addEventListener('change', updateLinearVisibility);
+    document.getElementById('report-engineer').addEventListener('change', updateLinearVisibility);
+    
+    // Initialize Linear visibility on load
+    updateLinearVisibility();
+
+    // Linear checkbox toggle
+    document.getElementById('include-linear').addEventListener('change', (e) => {
+      const teamSelect = document.getElementById('linear-team-select');
+      if (e.target.checked && hasLinearToken) {
+        teamSelect.classList.remove('hidden');
+      } else {
+        teamSelect.classList.add('hidden');
+      }
+    });
+
+    // Show/hide functions
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.classList.remove('hidden');
+      setTimeout(() => errorEl.classList.add('hidden'), 5000);
+    }
+
+    function showSuccess(msg) {
+      successEl.textContent = msg;
+      successEl.classList.remove('hidden');
+      setTimeout(() => successEl.classList.add('hidden'), 3000);
+    }
+
+    function showLoading(msg) {
+      setupView.classList.add('hidden');
+      resultsView.classList.add('hidden');
+      loadingView.classList.remove('hidden');
+      loadingText.textContent = msg;
+      setupFooter.classList.add('hidden');
+      resultsFooter.classList.add('hidden');
+    }
+
+    function showSetup() {
+      setupView.classList.remove('hidden');
+      loadingView.classList.add('hidden');
+      resultsView.classList.add('hidden');
+      setupFooter.classList.remove('hidden');
+      resultsFooter.classList.add('hidden');
+      currentData = null;
+    }
+
+    function showResults() {
+      setupView.classList.add('hidden');
+      loadingView.classList.add('hidden');
+      resultsView.classList.remove('hidden');
+      setupFooter.classList.add('hidden');
+      resultsFooter.classList.remove('hidden');
+      if (hasNotionToken) {
+        document.getElementById('notion-export-btn').classList.remove('hidden');
+      }
+    }
+
+    // Token management
+    function updateFigmaStatus(connected) {
+      hasFigmaToken = connected;
+      const status = document.getElementById('figma-status');
+      const input = document.getElementById('figma-token-input');
+      const saved = document.getElementById('figma-token-saved');
+      if (connected) {
+        status.innerHTML = '<span class="indicator connected"></span><span>Connected</span>';
+        input.classList.add('hidden');
+        saved.classList.remove('hidden');
+      } else {
+        status.innerHTML = '<span class="indicator disconnected"></span><span>Not connected</span>';
+        input.classList.remove('hidden');
+        saved.classList.add('hidden');
+      }
+    }
+
+    function updateLinearStatus(connected, teams = []) {
+      hasLinearToken = connected;
+      linearTeams = teams;
+      const status = document.getElementById('linear-status');
+      const input = document.getElementById('linear-token-input');
+      const saved = document.getElementById('linear-token-saved');
+      if (connected) {
+        status.innerHTML = '<span class="indicator connected"></span><span>Connected</span>';
+        input.classList.add('hidden');
+        saved.classList.remove('hidden');
+        // Populate teams
+        const select = document.getElementById('linear-team');
+        select.innerHTML = '<option value="">Select a team...</option>';
+        teams.forEach(team => {
+          select.innerHTML += `<option value="${team.id}">${team.name}</option>`;
+        });
+      } else {
+        status.innerHTML = '<span class="indicator disconnected"></span><span>Not connected</span>';
+        input.classList.remove('hidden');
+        saved.classList.add('hidden');
+      }
+    }
+
+    function updateNotionStatus(connected) {
+      hasNotionToken = connected;
+      const status = document.getElementById('notion-status');
+      const input = document.getElementById('notion-token-input');
+      const saved = document.getElementById('notion-token-saved');
+      if (connected) {
+        status.innerHTML = '<span class="indicator connected"></span><span>Connected</span>';
+        input.classList.add('hidden');
+        saved.classList.remove('hidden');
+      } else {
+        status.innerHTML = '<span class="indicator disconnected"></span><span>Not connected</span>';
+        input.classList.remove('hidden');
+        saved.classList.add('hidden');
+      }
+    }
+
+    function saveLinearToken() {
+      const token = document.getElementById('linear-token').value.trim();
+      if (token) {
+        parent.postMessage({ pluginMessage: { type: 'save-linear-token', token } }, '*');
+      }
+    }
+
+    function saveNotionToken() {
+      const token = document.getElementById('notion-token').value.trim();
+      if (token) {
+        parent.postMessage({ pluginMessage: { type: 'save-notion-token', token } }, '*');
+      }
+    }
+
+    function saveFigmaToken() {
+      const token = document.getElementById('figma-token').value.trim();
+      if (token) {
+        parent.postMessage({ pluginMessage: { type: 'save-figma-token', token } }, '*');
+      }
+    }
+
+    function clearFigmaToken() {
+      document.getElementById('figma-token').value = '';
+      updateFigmaStatus(false);
+    }
+
+    function clearLinearToken() {
+      updateLinearStatus(false);
+    }
+
+    function clearNotionToken() {
+      updateNotionStatus(false);
+    }
+
+    // Slack status
+    let hasSlackWebhook = false;
+
+    function updateSlackStatus(connected) {
+      hasSlackWebhook = connected;
+      const status = document.getElementById('slack-status');
+      const input = document.getElementById('slack-webhook-input');
+      const saved = document.getElementById('slack-webhook-saved');
+      if (connected) {
+        status.innerHTML = '<span class="indicator connected"></span><span>Connected</span>';
+        input.classList.add('hidden');
+        saved.classList.remove('hidden');
+      } else {
+        status.innerHTML = '<span class="indicator disconnected"></span><span>Not connected</span>';
+        input.classList.remove('hidden');
+        saved.classList.add('hidden');
+      }
+    }
+
+    function saveSlackWebhook() {
+      const webhook = document.getElementById('slack-webhook').value.trim();
+      if (webhook) {
+        parent.postMessage({ pluginMessage: { type: 'save-slack-webhook', webhook } }, '*');
+      }
+    }
+
+    function clearSlackWebhook() {
+      document.getElementById('slack-webhook').value = '';
+      parent.postMessage({ pluginMessage: { type: 'clear-slack-webhook' } }, '*');
+      updateSlackStatus(false);
+    }
+
+    function shareToSlack() {
+      if (!currentData) return;
+      parent.postMessage({
+        pluginMessage: {
+          type: 'share-to-slack',
+          structuredDiff: currentData.structuredDiff,
+          fileName: currentData.fileName,
+          dateRange: currentData.dateRange,
+          fileKey: currentData.fileKey,
+        }
+      }, '*');
+    }
+
+    function showSlackCopyModal(text, message) {
+      document.getElementById('slack-modal-message').textContent = message || '';
+      document.getElementById('slack-copy-text').value = text;
+      document.getElementById('slack-modal').classList.remove('hidden');
+    }
+
+    function hideSlackModal() {
+      document.getElementById('slack-modal').classList.add('hidden');
+    }
+
+    function copySlackText() {
+      const textarea = document.getElementById('slack-copy-text');
+      textarea.select();
+      document.execCommand('copy');
+      hideSlackModal();
+      showSuccess('Copied to clipboard! Paste in Slack.');
+    }
+
+    // Extract file key from URL
+    function extractFileKey(url) {
+      if (!url) return null;
+      const match = url.match(/figma\.com\/(?:file|design)\/([a-zA-Z0-9]+)/);
+      if (match) return match[1];
+      if (/^[a-zA-Z0-9]+$/.test(url.trim())) return url.trim();
+      return null;
+    }
+
+    // Generate recap
+    function generateRecap() {
+      const figmaToken = document.getElementById('figma-token').value.trim();
+      const startDate = document.getElementById('start-date').value;
+      const endDate = document.getElementById('end-date').value;
+      const includeLinear = document.getElementById('include-linear').checked;
+      const linearTeamId = document.getElementById('linear-team').value;
+      const notionSpecUrl = document.getElementById('notion-spec-url').value.trim();
+
+      // Report type selections
+      const reportTypes = {
+        structure: document.getElementById('report-structure').checked,
+        components: document.getElementById('report-components').checked,
+        diff: document.getElementById('report-diff').checked,
+        stakeholder: document.getElementById('report-stakeholder').checked,
+        engineer: document.getElementById('report-engineer').checked,
+      };
+
+      // Validate at least one report type selected
+      if (!reportTypes.structure && !reportTypes.components && !reportTypes.diff && !reportTypes.stakeholder && !reportTypes.engineer) {
+        showError('Please select at least one report type.');
+        return;
+      }
+
+      let fileKey = detectedFileKey;
+      const urlValue = document.getElementById('file-url').value.trim();
+      const extractedKey = extractFileKey(urlValue);
+      if (extractedKey) {
+        fileKey = extractedKey;
+      }
+
+      if (!fileKey) {
+        showError('Please enter a Figma file URL.');
+        return;
+      }
+
+      if (!figmaToken && !hasFigmaToken) {
+        showError('Please connect Figma in the Integrations tab.');
+        return;
+      }
+
+      if (!startDate || !endDate) {
+        showError('Please select a date range.');
+        return;
+      }
+
+      showLoading('Starting...');
+
+      parent.postMessage({
+        pluginMessage: {
+          type: 'generate-recap',
+          figmaToken: figmaToken || '__STORED__',
+          startDate,
+          endDate,
+          fileKey,
+          includeLinear,
+          linearTeamId,
+          notionSpecUrl,
+          reportTypes,
+        }
+      }, '*');
+    }
+
+    // Export
+    function exportMarkdown(type) {
+      if (!currentData) return;
+      parent.postMessage({
+        pluginMessage: {
+          type: 'export-markdown',
+          reportType: type,
+          structuredDiff: currentData.structuredDiff,
+          stakeholderReport: currentData.stakeholderReport,
+          engineerReport: currentData.engineerReport,
+          diffResult: currentData.diffResult,
+          fileName: currentData.fileName,
+          dateRange: currentData.dateRange,
+        }
+      }, '*');
+    }
+
+    function downloadFile(content, filename) {
+      const blob = new Blob([content], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Notion modal
+    function showNotionModal() {
+      document.getElementById('notion-modal').classList.remove('hidden');
+      parent.postMessage({ pluginMessage: { type: 'fetch-notion-pages' } }, '*');
+    }
+
+    function hideNotionModal() {
+      document.getElementById('notion-modal').classList.add('hidden');
+    }
+
+    function exportToNotion() {
+      const pageId = document.getElementById('notion-parent-page').value;
+      if (!pageId) {
+        showError('Please select a parent page.');
+        return;
+      }
+      hideNotionModal();
+      showLoading('Creating Notion page...');
+      parent.postMessage({
+        pluginMessage: {
+          type: 'export-to-notion',
+          stakeholderReport: currentData.stakeholderReport,
+          parentPageId: pageId,
+          fileKey: currentData.fileKey,
+        }
+      }, '*');
+    }
+
+    // Message handler
+    window.onmessage = (event) => {
+      const msg = event.data.pluginMessage;
+      if (!msg) return;
+
+      switch (msg.type) {
+        case 'init':
+          detectedFileKey = msg.fileKey;
+          if (msg.fileKey) {
+            document.getElementById('file-url').value = `https://www.figma.com/file/${msg.fileKey}`;
+            document.getElementById('file-url').placeholder = 'Auto-detected from current file';
+          }
+          if (msg.hasFigmaToken) {
+            updateFigmaStatus(true);
+            document.getElementById('figma-token').value = msg.figmaToken || '';
+          }
+          if (msg.hasLinearToken) {
+            parent.postMessage({ pluginMessage: { type: 'fetch-linear-teams' } }, '*');
+          }
+          if (msg.hasNotionToken) {
+            updateNotionStatus(true);
+          }
+          if (msg.hasSlackWebhook) {
+            updateSlackStatus(true);
+          }
+          break;
+
+        case 'figma-token-saved':
+          updateFigmaStatus(true);
+          break;
+
+        case 'linear-token-saved':
+          updateLinearStatus(true, msg.teams || []);
+          showSuccess('Linear connected!');
+          break;
+
+        case 'linear-teams':
+          updateLinearStatus(true, msg.teams || []);
+          break;
+
+        case 'notion-token-saved':
+          updateNotionStatus(true);
+          showSuccess('Notion connected!');
+          break;
+
+        case 'slack-webhook-saved':
+          updateSlackStatus(true);
+          showSuccess('Slack connected!');
+          break;
+
+        case 'slack-share-success':
+          showSuccess('Shared to Slack!');
+          break;
+
+        case 'slack-copy-fallback':
+          showSlackCopyModal(msg.text, msg.message);
+          break;
+
+        case 'notion-pages':
+          const select = document.getElementById('notion-parent-page');
+          select.innerHTML = '<option value="">Select a page...</option>';
+          (msg.pages || []).forEach(page => {
+            select.innerHTML += `<option value="${page.id}">${page.title}</option>`;
+          });
+          break;
+
+        case 'loading':
+          showLoading(msg.message);
+          break;
+
+        case 'error':
+          showSetup();
+          showError(msg.message);
+          break;
+
+        case 'recap-result':
+          currentData = msg;
+          
+          // Update tabs based on what was requested
+          const tabs = document.querySelectorAll('.results-tab');
+          const contents = document.querySelectorAll('.results-content');
+          let firstVisibleTab = null;
+
+          tabs.forEach(tab => {
+            const tabType = tab.dataset.results;
+            let show = false;
+            
+            if (tabType === 'structure' && msg.structureHTML) show = true;
+            if (tabType === 'components' && msg.componentsHTML) show = true;
+            if (tabType === 'stakeholder' && msg.stakeholderHTML) show = true;
+            if (tabType === 'engineer' && msg.engineerHTML) show = true;
+            if (tabType === 'raw' && msg.rawDiffHTML) show = true;
+            
+            if (show) {
+              tab.classList.remove('hidden');
+              if (!firstVisibleTab) firstVisibleTab = tab;
+            } else {
+              tab.classList.add('hidden');
+            }
+            tab.classList.remove('active');
+          });
+
+          contents.forEach(content => {
+            content.classList.remove('active');
+            content.classList.add('hidden');
+          });
+
+          // Set content for all views
+          if (msg.structureHTML) {
+            document.getElementById('structure-content').innerHTML = msg.structureHTML;
+            document.getElementById('structure-content').classList.remove('hidden');
+            // Add tree toggle handlers
+            setupTreeToggles();
+          }
+          if (msg.componentsHTML) {
+            document.getElementById('components-content').innerHTML = msg.componentsHTML;
+            document.getElementById('components-content').classList.remove('hidden');
+          }
+          if (msg.stakeholderHTML) {
+            document.getElementById('stakeholder-content').innerHTML = msg.stakeholderHTML;
+            document.getElementById('stakeholder-content').classList.remove('hidden');
+          }
+          if (msg.engineerHTML) {
+            document.getElementById('engineer-content').innerHTML = msg.engineerHTML;
+            document.getElementById('engineer-content').classList.remove('hidden');
+          }
+          if (msg.rawDiffHTML) {
+            document.getElementById('raw-content').innerHTML = msg.rawDiffHTML;
+            document.getElementById('raw-content').classList.remove('hidden');
+          }
+
+          if (firstVisibleTab) {
+            firstVisibleTab.classList.add('active');
+            document.getElementById(firstVisibleTab.dataset.results + '-content').classList.add('active');
+          }
+
+          // Update export buttons based on what's available
+          document.querySelector('.export-structure').classList.toggle('hidden', !msg.structuredDiff);
+          document.querySelector('.export-raw').classList.toggle('hidden', !msg.rawDiffHTML);
+          document.querySelector('.export-stakeholder').classList.toggle('hidden', !msg.stakeholderHTML);
+          document.querySelector('.export-engineer').classList.toggle('hidden', !msg.engineerHTML);
+          // Show Slack share button if we have structured diff (works with or without webhook)
+          document.getElementById('slack-share-btn').classList.toggle('hidden', !msg.structuredDiff);
+
+          showResults();
+          break;
+
+        case 'export-ready':
+          downloadFile(msg.markdown, msg.filename);
+          break;
+
+        case 'notion-export-complete':
+          showResults();
+          showSuccess('Page created! Opening in browser...');
+          // Can't open URL from plugin, but show success
+          break;
+
+        case 'tokens-cleared':
+          updateFigmaStatus(false);
+          updateLinearStatus(false);
+          updateNotionStatus(false);
+          break;
+      }
+    };
+
+    // Tree toggle functionality
+    function setupTreeToggles() {
+      document.querySelectorAll('.tree-node.has-children').forEach(node => {
+        const header = node.querySelector('.tree-node-header');
+        const children = node.querySelector('.tree-children');
+        if (header && children) {
+          header.addEventListener('click', () => {
+            node.classList.toggle('expanded');
+            children.style.display = node.classList.contains('expanded') ? '' : 'none';
+          });
+        }
+      });
+    }
+
+    // Initialize
+    initDates();
+  </script>
+</body>
+</html>

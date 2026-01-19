@@ -1,0 +1,21 @@
+{
+  "name": "RecapMe",
+  "id": "1591541566484135666",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "capabilities": [],
+  "enableProposedApi": false,
+  "documentAccess": "dynamic-page",
+  "editorType": [
+    "figma"
+  ],
+  "networkAccess": {
+    "allowedDomains": [
+      "https://api.figma.com",
+      "https://api.linear.app",
+      "https://api.notion.com",
+      "https://hooks.slack.com"
+    ]
+  }
+}
