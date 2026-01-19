@@ -1,7 +1,9 @@
 /**
  * Notion API Integration
- * Creates recap pages in Notion
+ * Creates recap pages in Notion and parses product specs
  */
+
+import type { ProductSpec, ScreenSpec } from '../types';
 
 const NOTION_API_URL = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
@@ -416,4 +418,325 @@ export function reportToNotionContent(
     blockers: report.blockers,
     figmaFileUrl,
   };
+}
+
+// ============================================
+// Product Spec Parsing
+// ============================================
+
+interface NotionBlock {
+  id: string;
+  type: string;
+  has_children: boolean;
+  [key: string]: unknown;
+}
+
+interface RichTextItem {
+  plain_text: string;
+  href?: string | null;
+}
+
+/**
+ * Extract plain text from Notion rich text array
+ */
+function extractPlainText(richText: RichTextItem[] | undefined): string {
+  if (!richText || !Array.isArray(richText)) return '';
+  return richText.map(item => item.plain_text || '').join('');
+}
+
+/**
+ * Extract page ID from a Notion URL
+ */
+export function extractNotionPageId(url: string): string | null {
+  // Handle various Notion URL formats:
+  // https://www.notion.so/Page-Name-abc123def456...
+  // https://www.notion.so/workspace/abc123def456...
+  // https://notion.so/abc123def456...
+  // abc123def456 (just the ID)
+
+  // Clean up the URL
+  const cleaned = url.trim();
+
+  // If it's already a valid ID format (32 hex chars with or without dashes)
+  const idPattern = /^[a-f0-9]{32}$/i;
+  const idWithDashesPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+
+  if (idPattern.test(cleaned) || idWithDashesPattern.test(cleaned)) {
+    return cleaned.replace(/-/g, '');
+  }
+
+  // Extract from URL - the ID is the last 32 hex chars (possibly with dashes)
+  const urlMatch = cleaned.match(/([a-f0-9]{32}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})(?:\?|$)/i);
+  if (urlMatch) {
+    return urlMatch[1].replace(/-/g, '');
+  }
+
+  // Try extracting from the end of the URL path (page name format)
+  const pathMatch = cleaned.match(/([a-f0-9]{32})$/i);
+  if (pathMatch) {
+    return pathMatch[1];
+  }
+
+  return null;
+}
+
+/**
+ * Fetch all blocks from a Notion page
+ */
+export async function fetchPageBlocks(
+  token: string,
+  pageId: string
+): Promise<NotionBlock[]> {
+  const blocks: NotionBlock[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const endpoint = cursor
+      ? `/blocks/${pageId}/children?start_cursor=${cursor}&page_size=100`
+      : `/blocks/${pageId}/children?page_size=100`;
+
+    const response = await notionRequest<{
+      results: NotionBlock[];
+      has_more: boolean;
+      next_cursor?: string;
+    }>(token, endpoint);
+
+    blocks.push(...response.results);
+    cursor = response.has_more ? response.next_cursor : undefined;
+  } while (cursor);
+
+  return blocks;
+}
+
+/**
+ * Fetch page title and properties
+ */
+export async function fetchPageInfo(
+  token: string,
+  pageId: string
+): Promise<{ title: string; properties: Record<string, unknown> }> {
+  interface PageResponse {
+    properties: {
+      title?: { title?: RichTextItem[] };
+      Name?: { title?: RichTextItem[] };
+      [key: string]: unknown;
+    };
+  }
+
+  const response = await notionRequest<PageResponse>(token, `/pages/${pageId}`);
+
+  const title =
+    extractPlainText(response.properties?.title?.title) ||
+    extractPlainText(response.properties?.Name?.title) ||
+    'Untitled';
+
+  return {
+    title,
+    properties: response.properties,
+  };
+}
+
+/**
+ * Parse Notion blocks into a ProductSpec
+ */
+export async function parseProductSpec(
+  token: string,
+  pageId: string
+): Promise<ProductSpec> {
+  const [pageInfo, blocks] = await Promise.all([
+    fetchPageInfo(token, pageId),
+    fetchPageBlocks(token, pageId),
+  ]);
+
+  const spec: ProductSpec = {
+    title: pageInfo.title,
+    overview: '',
+    screens: [],
+    requirements: [],
+    userStories: [],
+  };
+
+  let currentSection: 'overview' | 'screens' | 'requirements' | 'stories' | 'other' = 'overview';
+  let currentScreen: ScreenSpec | null = null;
+  const overviewParts: string[] = [];
+
+  for (const block of blocks) {
+    const blockType = block.type;
+
+    // Handle headings - they determine the current section
+    if (blockType === 'heading_1' || blockType === 'heading_2') {
+      const headingData = block[blockType] as { rich_text?: RichTextItem[] };
+      const headingText = extractPlainText(headingData?.rich_text).toLowerCase();
+
+      // Save any pending screen
+      if (currentScreen) {
+        spec.screens.push(currentScreen);
+        currentScreen = null;
+      }
+
+      // Determine section from heading
+      if (headingText.includes('overview') || headingText.includes('summary') || headingText.includes('description')) {
+        currentSection = 'overview';
+      } else if (headingText.includes('screen') || headingText.includes('page') || headingText.includes('view') || headingText.includes('ui')) {
+        currentSection = 'screens';
+      } else if (headingText.includes('requirement') || headingText.includes('spec') || headingText.includes('feature')) {
+        currentSection = 'requirements';
+      } else if (headingText.includes('user stor') || headingText.includes('use case')) {
+        currentSection = 'stories';
+      } else {
+        currentSection = 'other';
+      }
+      continue;
+    }
+
+    // Handle heading_3 - could be screen names within screens section
+    if (blockType === 'heading_3' && currentSection === 'screens') {
+      // Save previous screen
+      if (currentScreen) {
+        spec.screens.push(currentScreen);
+      }
+
+      const headingData = block.heading_3 as { rich_text?: RichTextItem[] };
+      const screenName = extractPlainText(headingData?.rich_text);
+
+      currentScreen = {
+        name: screenName,
+        description: '',
+        elements: [],
+      };
+      continue;
+    }
+
+    // Handle paragraphs
+    if (blockType === 'paragraph') {
+      const paraData = block.paragraph as { rich_text?: RichTextItem[] };
+      const text = extractPlainText(paraData?.rich_text);
+      if (!text) continue;
+
+      if (currentSection === 'overview') {
+        overviewParts.push(text);
+      } else if (currentSection === 'screens' && currentScreen) {
+        // If no description yet, use as description
+        if (!currentScreen.description) {
+          currentScreen.description = text;
+        }
+      }
+    }
+
+    // Handle bulleted lists
+    if (blockType === 'bulleted_list_item') {
+      const listData = block.bulleted_list_item as { rich_text?: RichTextItem[] };
+      const text = extractPlainText(listData?.rich_text);
+      if (!text) continue;
+
+      if (currentSection === 'requirements') {
+        spec.requirements.push(text);
+      } else if (currentSection === 'stories') {
+        spec.userStories.push(text);
+      } else if (currentSection === 'screens' && currentScreen) {
+        currentScreen.elements.push(text);
+      } else if (currentSection === 'overview') {
+        overviewParts.push(`- ${text}`);
+      }
+    }
+
+    // Handle numbered lists similarly
+    if (blockType === 'numbered_list_item') {
+      const listData = block.numbered_list_item as { rich_text?: RichTextItem[] };
+      const text = extractPlainText(listData?.rich_text);
+      if (!text) continue;
+
+      if (currentSection === 'requirements') {
+        spec.requirements.push(text);
+      } else if (currentSection === 'stories') {
+        spec.userStories.push(text);
+      } else if (currentSection === 'screens' && currentScreen) {
+        currentScreen.elements.push(text);
+      }
+    }
+
+    // Handle to-do items as requirements
+    if (blockType === 'to_do') {
+      const todoData = block.to_do as { rich_text?: RichTextItem[]; checked?: boolean };
+      const text = extractPlainText(todoData?.rich_text);
+      if (!text) continue;
+
+      if (currentSection === 'requirements' || currentSection === 'screens') {
+        spec.requirements.push(text);
+      }
+    }
+
+    // Handle callouts as important notes
+    if (blockType === 'callout') {
+      const calloutData = block.callout as { rich_text?: RichTextItem[] };
+      const text = extractPlainText(calloutData?.rich_text);
+      if (text && currentSection === 'screens' && currentScreen) {
+        currentScreen.flow = text;
+      }
+    }
+  }
+
+  // Save any pending screen
+  if (currentScreen) {
+    spec.screens.push(currentScreen);
+  }
+
+  // Compile overview
+  spec.overview = overviewParts.join('\n\n');
+
+  return spec;
+}
+
+/**
+ * Generate a summary of a ProductSpec for AI consumption
+ */
+export function summarizeProductSpec(spec: ProductSpec): string {
+  const lines: string[] = [];
+
+  lines.push(`# ${spec.title}`);
+  lines.push('');
+
+  if (spec.overview) {
+    lines.push('## Overview');
+    lines.push(spec.overview);
+    lines.push('');
+  }
+
+  if (spec.screens.length > 0) {
+    lines.push('## Screens');
+    for (const screen of spec.screens) {
+      lines.push(`### ${screen.name}`);
+      if (screen.description) {
+        lines.push(screen.description);
+      }
+      if (screen.elements.length > 0) {
+        lines.push('Elements:');
+        for (const elem of screen.elements) {
+          lines.push(`- ${elem}`);
+        }
+      }
+      if (screen.flow) {
+        lines.push(`Flow: ${screen.flow}`);
+      }
+      lines.push('');
+    }
+  }
+
+  if (spec.requirements.length > 0) {
+    lines.push('## Requirements');
+    for (const req of spec.requirements) {
+      lines.push(`- ${req}`);
+    }
+    lines.push('');
+  }
+
+  if (spec.userStories.length > 0) {
+    lines.push('## User Stories');
+    for (const story of spec.userStories) {
+      lines.push(`- ${story}`);
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
 }

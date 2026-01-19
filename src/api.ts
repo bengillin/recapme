@@ -1,4 +1,4 @@
-import type { FigmaVersion, VersionsResponse, FigmaFileResponse } from './types';
+import type { FigmaVersion, VersionsResponse, FigmaFileResponse, DesignSystemComponent } from './types';
 
 const FIGMA_API_BASE = 'https://api.figma.com/v1';
 
@@ -168,4 +168,115 @@ export async function validateToken(token: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// ============================================
+// Design System API Methods
+// ============================================
+
+interface ComponentsResponse {
+  meta: {
+    components: Array<{
+      key: string;
+      name: string;
+      description: string;
+      containing_frame?: {
+        name: string;
+        nodeId: string;
+      };
+    }>;
+    component_sets?: Array<{
+      key: string;
+      name: string;
+      description: string;
+    }>;
+  };
+}
+
+interface StylesResponse {
+  meta: {
+    styles: Array<{
+      key: string;
+      name: string;
+      style_type: string;
+      description: string;
+    }>;
+  };
+}
+
+/**
+ * Fetch all published components from a Figma file (library)
+ */
+export async function fetchFileComponents(
+  fileKey: string,
+  token: string
+): Promise<DesignSystemComponent[]> {
+  const response = await fetchWithAuth(
+    `${FIGMA_API_BASE}/files/${fileKey}/components`,
+    token
+  );
+  const data: ComponentsResponse = await response.json();
+
+  return data.meta.components.map(comp => ({
+    key: comp.key,
+    name: comp.name,
+    description: comp.description || '',
+    containingFrame: comp.containing_frame ? {
+      name: comp.containing_frame.name,
+      nodeId: comp.containing_frame.nodeId,
+    } : undefined,
+  }));
+}
+
+/**
+ * Fetch all published styles from a Figma file
+ */
+export async function fetchFileStyles(
+  fileKey: string,
+  token: string
+): Promise<{ colors: string[]; typography: string[]; effects: string[] }> {
+  const response = await fetchWithAuth(
+    `${FIGMA_API_BASE}/files/${fileKey}/styles`,
+    token
+  );
+  const data: StylesResponse = await response.json();
+
+  const colors: string[] = [];
+  const typography: string[] = [];
+  const effects: string[] = [];
+
+  for (const style of data.meta.styles) {
+    const name = style.name;
+    switch (style.style_type) {
+      case 'FILL':
+        colors.push(name);
+        break;
+      case 'TEXT':
+        typography.push(name);
+        break;
+      case 'EFFECT':
+        effects.push(name);
+        break;
+    }
+  }
+
+  return { colors, typography, effects };
+}
+
+/**
+ * Fetch file metadata (name, lastModified, etc.)
+ */
+export async function fetchFileMetadata(
+  fileKey: string,
+  token: string
+): Promise<{ name: string; lastModified: string }> {
+  const response = await fetchWithAuth(
+    `${FIGMA_API_BASE}/files/${fileKey}?depth=1`,
+    token
+  );
+  const data = await response.json();
+  return {
+    name: data.name,
+    lastModified: data.lastModified,
+  };
 }

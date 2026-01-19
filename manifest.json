@@ -15,7 +15,8 @@
       "https://api.figma.com",
       "https://api.linear.app",
       "https://api.notion.com",
-      "https://hooks.slack.com"
+      "https://hooks.slack.com",
+      "https://api.anthropic.com"
     ]
   }
 }

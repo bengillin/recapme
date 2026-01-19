@@ -921,7 +921,8 @@
       <div id="setup-view">
         <!-- Tabs for setup sections -->
         <div class="tabs">
-          <button class="tab active" data-tab="config">Configuration</button>
+          <button class="tab active" data-tab="config">Recap</button>
+          <button class="tab" data-tab="generate">Generate</button>
           <button class="tab" data-tab="integrations">Integrations</button>
         </div>
 
@@ -1020,6 +1021,103 @@
           </div>
         </div>
 
+        <!-- Generate Tab -->
+        <div id="generate-tab" class="tab-content">
+          <div class="section">
+            <div class="section-title">
+              <span>AI Design Generation</span>
+            </div>
+            <p class="hint" style="margin-bottom: 16px;">
+              Generate Figma designs from product specs using AI.
+            </p>
+
+            <!-- Design System -->
+            <div class="form-group">
+              <label>Design System File</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" id="design-system-url" placeholder="https://www.figma.com/file/your-design-system...">
+                <button class="btn btn-sm btn-secondary" onclick="indexDesignSystem()">Index</button>
+              </div>
+              <p class="hint">Your published component library file</p>
+              <div id="ds-index-status" class="hidden" style="margin-top: 8px; font-size: 12px; color: var(--color-success);">
+              </div>
+            </div>
+
+            <!-- Product Spec Source Toggle -->
+            <div class="form-group">
+              <label>Product Specification</label>
+              <div class="spec-source-toggle" style="display: flex; gap: 4px; margin-bottom: 12px;">
+                <button class="preset-btn spec-source-btn active" data-source="text" onclick="setSpecSource('text')">
+                  Paste Text
+                </button>
+                <button class="preset-btn spec-source-btn" data-source="notion" onclick="setSpecSource('notion')">
+                  Notion URL
+                </button>
+              </div>
+
+              <!-- Text Input -->
+              <div id="spec-text-input">
+                <textarea id="gen-spec-text" rows="10" placeholder="Paste or type your product specification here...
+
+Example format:
+# Login Screen
+A simple login screen for user authentication.
+
+## Elements
+- Email input field
+- Password input field
+- Sign In button (primary)
+- Forgot Password link
+- Social login buttons (Google, Apple)
+
+## Requirements
+- Show error states for invalid credentials
+- Support password visibility toggle" style="width: 100%; font-family: inherit; font-size: 13px; resize: vertical; background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 12px;"></textarea>
+                <p class="hint">Describe screens, elements, and requirements</p>
+              </div>
+
+              <!-- Notion URL Input -->
+              <div id="spec-notion-input" class="hidden">
+                <input type="text" id="gen-notion-spec-url" placeholder="https://www.notion.so/your-product-spec...">
+                <p class="hint">Page with structured sections: Overview, Screens, Requirements</p>
+              </div>
+            </div>
+
+            <!-- Generate Button -->
+            <div style="margin-top: 20px; display: flex; gap: 8px;">
+              <button id="generate-design-btn" class="btn btn-primary" onclick="generateFromSpec()">
+                Generate Design
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="generateTestFrame()">
+                Test Generator
+              </button>
+            </div>
+          </div>
+
+          <!-- How It Works -->
+          <div class="section">
+            <div class="section-title">How It Works</div>
+            <ol style="font-size: 13px; color: var(--text-secondary); padding-left: 20px; margin: 0;">
+              <li style="margin-bottom: 8px;">Index your design system to catalog available components</li>
+              <li style="margin-bottom: 8px;">Provide a product spec (paste text or link Notion page)</li>
+              <li style="margin-bottom: 8px;">Claude AI interprets the spec and generates a design schema</li>
+              <li>The plugin creates frames using your design system components</li>
+            </ol>
+          </div>
+
+          <!-- Spec Format Guide -->
+          <div class="section">
+            <div class="section-title">Recommended Spec Format</div>
+            <p class="hint" style="margin-bottom: 8px;">Structure your spec with these sections:</p>
+            <ul style="font-size: 12px; color: var(--text-secondary); padding-left: 20px; margin: 0;">
+              <li><strong>Screen Name</strong> - as a heading</li>
+              <li><strong>Description</strong> - what the screen does</li>
+              <li><strong>Elements</strong> - UI components as bullet points</li>
+              <li><strong>Requirements</strong> - functional specs (optional)</li>
+            </ul>
+          </div>
+        </div>
+
         <!-- Integrations Tab -->
         <div id="integrations-tab" class="tab-content">
           <!-- Figma -->
@@ -1111,6 +1209,29 @@
             </div>
             <div id="slack-webhook-saved" class="hidden">
               <button class="btn btn-link btn-sm" onclick="clearSlackWebhook()">Disconnect</button>
+            </div>
+          </div>
+
+          <!-- Anthropic (Claude AI) -->
+          <div class="section">
+            <div class="section-title">
+              <span>Anthropic (Claude AI)</span>
+              <div id="anthropic-status" class="token-status">
+                <span class="indicator disconnected"></span>
+                <span>Not connected</span>
+              </div>
+            </div>
+            <div id="anthropic-key-input" class="form-group">
+              <input type="password" id="anthropic-key" placeholder="sk-ant-api...">
+              <p class="hint">
+                <a href="https://console.anthropic.com/settings/keys" target="_blank">
+                  Get your API key from Anthropic Console
+                </a>
+              </p>
+              <button class="btn btn-sm btn-secondary" style="margin-top: 8px" onclick="saveAnthropicKey()">Connect Anthropic</button>
+            </div>
+            <div id="anthropic-key-saved" class="hidden">
+              <button class="btn btn-link btn-sm" onclick="clearAnthropicKey()">Disconnect</button>
             </div>
           </div>
         </div>
@@ -1497,6 +1618,141 @@
       return null;
     }
 
+    // ============================================
+    // Design Generation Functions
+    // ============================================
+
+    let hasAnthropicKey = false;
+    let designSystemIndexed = false;
+    let specSource = 'text'; // 'text' or 'notion'
+
+    function updateAnthropicStatus(connected) {
+      hasAnthropicKey = connected;
+      const status = document.getElementById('anthropic-status');
+      const input = document.getElementById('anthropic-key-input');
+      const saved = document.getElementById('anthropic-key-saved');
+      if (connected) {
+        status.innerHTML = '<span class="indicator connected"></span><span>Connected</span>';
+        input.classList.add('hidden');
+        saved.classList.remove('hidden');
+      } else {
+        status.innerHTML = '<span class="indicator disconnected"></span><span>Not connected</span>';
+        input.classList.remove('hidden');
+        saved.classList.add('hidden');
+      }
+    }
+
+    function saveAnthropicKey() {
+      const key = document.getElementById('anthropic-key').value.trim();
+      if (key) {
+        parent.postMessage({ pluginMessage: { type: 'save-anthropic-key', key } }, '*');
+      }
+    }
+
+    function clearAnthropicKey() {
+      document.getElementById('anthropic-key').value = '';
+      parent.postMessage({ pluginMessage: { type: 'clear-anthropic-key' } }, '*');
+      updateAnthropicStatus(false);
+    }
+
+    function setSpecSource(source) {
+      specSource = source;
+      const textInput = document.getElementById('spec-text-input');
+      const notionInput = document.getElementById('spec-notion-input');
+      const buttons = document.querySelectorAll('.spec-source-btn');
+
+      buttons.forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.source === source);
+      });
+
+      if (source === 'text') {
+        textInput.classList.remove('hidden');
+        notionInput.classList.add('hidden');
+      } else {
+        textInput.classList.add('hidden');
+        notionInput.classList.remove('hidden');
+      }
+    }
+
+    function indexDesignSystem() {
+      const url = document.getElementById('design-system-url').value.trim();
+      if (!url) {
+        showError('Please enter a design system file URL');
+        return;
+      }
+
+      // Save the file URL first
+      parent.postMessage({ pluginMessage: { type: 'save-design-system-file', fileUrl: url } }, '*');
+
+      // Extract file key
+      const fileKey = extractFileKey(url);
+      if (!fileKey) {
+        showError('Invalid design system file URL');
+        return;
+      }
+
+      showLoading('Indexing design system...');
+      parent.postMessage({ pluginMessage: { type: 'index-design-system', fileKey } }, '*');
+    }
+
+    function updateDesignSystemStatus(indexed, componentCount) {
+      designSystemIndexed = indexed;
+      const statusEl = document.getElementById('ds-index-status');
+      if (indexed && componentCount !== undefined) {
+        statusEl.textContent = `Indexed ${componentCount} components`;
+        statusEl.classList.remove('hidden');
+      } else {
+        statusEl.classList.add('hidden');
+      }
+    }
+
+    function generateFromSpec() {
+      if (!hasAnthropicKey) {
+        showError('Please connect Anthropic in the Integrations tab first');
+        return;
+      }
+
+      if (!designSystemIndexed) {
+        showError('Please index a design system first');
+        return;
+      }
+
+      if (specSource === 'text') {
+        const specText = document.getElementById('gen-spec-text').value.trim();
+        if (!specText) {
+          showError('Please enter a product specification');
+          return;
+        }
+
+        showLoading('Starting design generation...');
+        parent.postMessage({
+          pluginMessage: {
+            type: 'generate-from-spec',
+            specText,
+          }
+        }, '*');
+      } else {
+        const notionSpecUrl = document.getElementById('gen-notion-spec-url').value.trim();
+        if (!notionSpecUrl) {
+          showError('Please enter a Notion spec URL');
+          return;
+        }
+
+        showLoading('Starting design generation...');
+        parent.postMessage({
+          pluginMessage: {
+            type: 'generate-from-spec',
+            notionSpecUrl,
+          }
+        }, '*');
+      }
+    }
+
+    function generateTestFrame() {
+      showLoading('Creating test frame...');
+      parent.postMessage({ pluginMessage: { type: 'generate-test-frame' } }, '*');
+    }
+
     // Generate recap
     function generateRecap() {
       const figmaToken = document.getElementById('figma-token').value.trim();
@@ -1642,6 +1898,14 @@
           if (msg.hasSlackWebhook) {
             updateSlackStatus(true);
           }
+          if (msg.hasAnthropicKey) {
+            updateAnthropicStatus(true);
+          }
+          if (msg.designSystemFile) {
+            document.getElementById('design-system-url').value = `https://www.figma.com/file/${msg.designSystemFile}`;
+            // Re-index to verify
+            designSystemIndexed = true;
+          }
           break;
 
         case 'figma-token-saved':
@@ -1778,6 +2042,51 @@
           updateFigmaStatus(false);
           updateLinearStatus(false);
           updateNotionStatus(false);
+          updateAnthropicStatus(false);
+          break;
+
+        // Design Generation message handlers
+        case 'anthropic-key-saved':
+          updateAnthropicStatus(true);
+          showSuccess('Anthropic API key saved!');
+          break;
+
+        case 'anthropic-key-cleared':
+          updateAnthropicStatus(false);
+          break;
+
+        case 'design-system-file-saved':
+          // File saved, indexing will follow
+          break;
+
+        case 'design-system-indexed':
+          showSetup();
+          updateDesignSystemStatus(true, msg.componentCount);
+          showSuccess(`Design system indexed! Found ${msg.componentCount} components.`);
+          break;
+
+        case 'generation-complete':
+          showSetup();
+          const result = msg.result;
+          if (result.success) {
+            let message = `Generated ${result.framesCreated} screen(s) with ${result.componentInstances} component instances.`;
+            if (result.warnings && result.warnings.length > 0) {
+              message += ` (${result.warnings.length} warnings)`;
+            }
+            showSuccess(message);
+          } else {
+            showError(`Generation completed with errors: ${result.errors?.join(', ')}`);
+          }
+          break;
+
+        case 'test-frame-created':
+          showSetup();
+          showSuccess('Test frame created! Check your canvas.');
+          break;
+
+        case 'warning':
+          // Show warning but continue
+          console.warn(msg.message);
           break;
       }
     };

@@ -15,20 +15,20 @@ import {
   generateStructureMarkdown,
 } from './src/analysis/structure-grouper';
 import type { StructuredDiff } from './src/analysis/structure-grouper';
-import { 
-  generateStakeholderReport, 
-  generateStakeholderHTML, 
-  generateStakeholderMarkdown 
+import {
+  generateStakeholderReport,
+  generateStakeholderHTML,
+  generateStakeholderMarkdown
 } from './src/reports/stakeholder-report';
-import { 
-  generateEngineerReport, 
-  generateEngineerHTML, 
-  generateEngineerMarkdown 
+import {
+  generateEngineerReport,
+  generateEngineerHTML,
+  generateEngineerMarkdown
 } from './src/reports/engineer-report';
 import { generateUIHTML, generateMarkdownReport } from './src/report';
-import { 
-  fetchTeams, 
-  fetchTickets, 
+import {
+  fetchTeams,
+  fetchTickets,
   validateLinearKey,
   findTicketsForFigmaFile,
   matchTicketsToFeatures,
@@ -38,6 +38,8 @@ import {
   searchPages,
   createRecapPage,
   reportToNotionContent,
+  extractNotionPageId,
+  parseProductSpec,
 } from './src/integrations/notion';
 import {
   formatSlackMessage,
@@ -45,13 +47,142 @@ import {
   validateSlackWebhook,
   generateSlackText,
 } from './src/integrations/slack';
-import type { DiffResult } from './src/types';
+import type { DiffResult, DesignSystemIndex, ProductSpec, ScreenSpec } from './src/types';
+import { indexDesignSystem } from './src/design-system/indexer';
+import { generateDesignSchema, validateAnthropicKey, validateSchema, mapComponentNamesToKeys } from './src/ai/claude';
+import { generateFromSchema, generateTestFrame } from './src/generator/figma-generator';
+
+/**
+ * Parse raw text input into a ProductSpec
+ * Supports markdown-like formatting with # for headings and - for bullet points
+ */
+function parseTextSpec(text: string): ProductSpec {
+  const lines = text.split('\n');
+  const spec: ProductSpec = {
+    title: 'Design Spec',
+    overview: '',
+    screens: [],
+    requirements: [],
+    userStories: [],
+  };
+
+  let currentScreen: ScreenSpec | null = null;
+  let currentSection: 'overview' | 'elements' | 'requirements' | 'stories' = 'overview';
+  const overviewParts: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // H1: # Title - becomes spec title or screen name
+    if (trimmed.startsWith('# ')) {
+      // Save any pending screen
+      if (currentScreen) {
+        spec.screens.push(currentScreen);
+      }
+
+      const heading = trimmed.substring(2).trim();
+
+      // If no title yet, use as title
+      if (spec.title === 'Design Spec') {
+        spec.title = heading;
+      }
+
+      // Start a new screen
+      currentScreen = {
+        name: heading,
+        description: '',
+        elements: [],
+      };
+      currentSection = 'overview';
+      continue;
+    }
+
+    // H2: ## Section - determines what type of content follows
+    if (trimmed.startsWith('## ')) {
+      const sectionName = trimmed.substring(3).trim().toLowerCase();
+
+      if (sectionName.includes('element') || sectionName.includes('component') || sectionName.includes('ui')) {
+        currentSection = 'elements';
+      } else if (sectionName.includes('requirement') || sectionName.includes('spec')) {
+        currentSection = 'requirements';
+      } else if (sectionName.includes('user stor') || sectionName.includes('use case')) {
+        currentSection = 'stories';
+      } else {
+        currentSection = 'overview';
+      }
+      continue;
+    }
+
+    // H3: ### Sub-screen or sub-section
+    if (trimmed.startsWith('### ')) {
+      // Save previous screen and start new one
+      if (currentScreen) {
+        spec.screens.push(currentScreen);
+      }
+
+      currentScreen = {
+        name: trimmed.substring(4).trim(),
+        description: '',
+        elements: [],
+      };
+      currentSection = 'overview';
+      continue;
+    }
+
+    // Bullet point: - item
+    if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      const item = trimmed.substring(2).trim();
+
+      if (currentSection === 'elements' && currentScreen) {
+        currentScreen.elements.push(item);
+      } else if (currentSection === 'requirements') {
+        spec.requirements.push(item);
+      } else if (currentSection === 'stories') {
+        spec.userStories.push(item);
+      } else if (currentScreen) {
+        // Default to elements if we have a screen
+        currentScreen.elements.push(item);
+      }
+      continue;
+    }
+
+    // Regular text - description or overview
+    if (currentScreen && !currentScreen.description) {
+      currentScreen.description = trimmed;
+    } else if (!currentScreen) {
+      overviewParts.push(trimmed);
+    }
+  }
+
+  // Save any pending screen
+  if (currentScreen) {
+    spec.screens.push(currentScreen);
+  }
+
+  // Compile overview
+  spec.overview = overviewParts.join('\n');
+
+  // If no screens were created but we have content, create a default screen
+  if (spec.screens.length === 0 && (spec.overview || spec.requirements.length > 0)) {
+    spec.screens.push({
+      name: spec.title,
+      description: spec.overview,
+      elements: spec.requirements,
+    });
+  }
+
+  return spec;
+}
 
 const STORAGE_KEY_FIGMA_TOKEN = 'recapme_figma_token';
 const STORAGE_KEY_LINEAR_TOKEN = 'recapme_linear_token';
 const STORAGE_KEY_NOTION_TOKEN = 'recapme_notion_token';
 const STORAGE_KEY_SLACK_WEBHOOK = 'recapme_slack_webhook';
 const STORAGE_KEY_LINEAR_TEAM = 'recapme_linear_team';
+const STORAGE_KEY_ANTHROPIC_KEY = 'recapme_anthropic_key';
+const STORAGE_KEY_DESIGN_SYSTEM_FILE = 'recapme_design_system_file';
+const STORAGE_KEY_DESIGN_SYSTEM_INDEX = 'recapme_design_system_index';
 
 // Show the plugin UI
 figma.showUI(__html__, {
@@ -63,12 +194,14 @@ figma.showUI(__html__, {
 // Initialize the plugin
 async function initialize() {
   const fileKey = figma.fileKey;
-  const [figmaToken, linearToken, notionToken, slackWebhook, linearTeam] = await Promise.all([
+  const [figmaToken, linearToken, notionToken, slackWebhook, linearTeam, anthropicKey, designSystemFile] = await Promise.all([
     figma.clientStorage.getAsync(STORAGE_KEY_FIGMA_TOKEN),
     figma.clientStorage.getAsync(STORAGE_KEY_LINEAR_TOKEN),
     figma.clientStorage.getAsync(STORAGE_KEY_NOTION_TOKEN),
     figma.clientStorage.getAsync(STORAGE_KEY_SLACK_WEBHOOK),
     figma.clientStorage.getAsync(STORAGE_KEY_LINEAR_TEAM),
+    figma.clientStorage.getAsync(STORAGE_KEY_ANTHROPIC_KEY),
+    figma.clientStorage.getAsync(STORAGE_KEY_DESIGN_SYSTEM_FILE),
   ]);
 
   figma.ui.postMessage({
@@ -78,9 +211,11 @@ async function initialize() {
     hasLinearToken: !!linearToken,
     hasNotionToken: !!notionToken,
     hasSlackWebhook: !!slackWebhook,
+    hasAnthropicKey: !!anthropicKey,
     linearTeam: linearTeam || null,
     figmaToken: figmaToken || null,
     linearToken: linearToken || null,
+    designSystemFile: designSystemFile || null,
   });
 }
 
@@ -530,6 +665,199 @@ figma.ui.onmessage = async (msg: { type: string; [key: string]: unknown }) => {
         } catch {
           figma.ui.postMessage({ type: 'error', message: 'Failed to fetch Notion pages' });
         }
+      }
+      break;
+    }
+
+    // ============================================
+    // Design Generation Message Handlers
+    // ============================================
+
+    case 'save-anthropic-key': {
+      const key = msg.key as string;
+      const isValid = await validateAnthropicKey(key);
+      if (isValid) {
+        await figma.clientStorage.setAsync(STORAGE_KEY_ANTHROPIC_KEY, key);
+        figma.ui.postMessage({ type: 'anthropic-key-saved' });
+      } else {
+        figma.ui.postMessage({ type: 'error', message: 'Invalid Anthropic API key' });
+      }
+      break;
+    }
+
+    case 'clear-anthropic-key': {
+      await figma.clientStorage.deleteAsync(STORAGE_KEY_ANTHROPIC_KEY);
+      figma.ui.postMessage({ type: 'anthropic-key-cleared' });
+      break;
+    }
+
+    case 'save-design-system-file': {
+      const fileUrl = msg.fileUrl as string;
+      // Extract file key from URL
+      const match = fileUrl.match(/figma\.com\/(?:file|design)\/([a-zA-Z0-9]+)/);
+      const dsFileKey = match ? match[1] : fileUrl.trim();
+
+      if (!dsFileKey) {
+        figma.ui.postMessage({ type: 'error', message: 'Invalid design system file URL' });
+        break;
+      }
+
+      await figma.clientStorage.setAsync(STORAGE_KEY_DESIGN_SYSTEM_FILE, dsFileKey);
+      figma.ui.postMessage({ type: 'design-system-file-saved', fileKey: dsFileKey });
+      break;
+    }
+
+    case 'index-design-system': {
+      const dsFileKey = msg.fileKey as string || await figma.clientStorage.getAsync(STORAGE_KEY_DESIGN_SYSTEM_FILE);
+      const figmaToken = await figma.clientStorage.getAsync(STORAGE_KEY_FIGMA_TOKEN);
+
+      if (!dsFileKey) {
+        figma.ui.postMessage({ type: 'error', message: 'Please configure a design system file first' });
+        break;
+      }
+
+      if (!figmaToken) {
+        figma.ui.postMessage({ type: 'error', message: 'Please connect Figma first' });
+        break;
+      }
+
+      try {
+        figma.ui.postMessage({ type: 'loading', message: 'Indexing design system...' });
+
+        const index = await indexDesignSystem(dsFileKey, figmaToken);
+
+        // Cache the index
+        await figma.clientStorage.setAsync(STORAGE_KEY_DESIGN_SYSTEM_INDEX, JSON.stringify(index));
+
+        figma.ui.postMessage({
+          type: 'design-system-indexed',
+          index,
+          componentCount: index.components.length,
+        });
+      } catch (error) {
+        figma.ui.postMessage({
+          type: 'error',
+          message: error instanceof Error ? error.message : 'Failed to index design system',
+        });
+      }
+      break;
+    }
+
+    case 'generate-from-spec': {
+      const notionSpecUrl = msg.notionSpecUrl as string | undefined;
+      const specText = msg.specText as string | undefined;
+
+      // Get required credentials
+      const [figmaToken, notionToken, anthropicKey, cachedIndex] = await Promise.all([
+        figma.clientStorage.getAsync(STORAGE_KEY_FIGMA_TOKEN),
+        figma.clientStorage.getAsync(STORAGE_KEY_NOTION_TOKEN),
+        figma.clientStorage.getAsync(STORAGE_KEY_ANTHROPIC_KEY),
+        figma.clientStorage.getAsync(STORAGE_KEY_DESIGN_SYSTEM_INDEX),
+      ]);
+
+      if (!figmaToken) {
+        figma.ui.postMessage({ type: 'error', message: 'Please connect Figma first' });
+        break;
+      }
+
+      if (!anthropicKey) {
+        figma.ui.postMessage({ type: 'error', message: 'Please add your Anthropic API key' });
+        break;
+      }
+
+      if (!cachedIndex) {
+        figma.ui.postMessage({ type: 'error', message: 'Please index a design system first' });
+        break;
+      }
+
+      // Parse the cached index
+      let designSystemIndex: DesignSystemIndex;
+      try {
+        designSystemIndex = JSON.parse(cachedIndex);
+      } catch {
+        figma.ui.postMessage({ type: 'error', message: 'Design system index is corrupted. Please re-index.' });
+        break;
+      }
+
+      try {
+        let productSpec;
+
+        if (specText) {
+          // Parse text input into ProductSpec
+          figma.ui.postMessage({ type: 'loading', message: 'Parsing product specification...' });
+          productSpec = parseTextSpec(specText);
+        } else if (notionSpecUrl) {
+          // Check Notion token
+          if (!notionToken) {
+            figma.ui.postMessage({ type: 'error', message: 'Please connect Notion first' });
+            break;
+          }
+
+          // Extract Notion page ID
+          const notionPageId = extractNotionPageId(notionSpecUrl);
+          if (!notionPageId) {
+            figma.ui.postMessage({ type: 'error', message: 'Invalid Notion page URL' });
+            break;
+          }
+
+          // Parse the Notion spec
+          figma.ui.postMessage({ type: 'loading', message: 'Fetching Notion page...' });
+          productSpec = await parseProductSpec(notionToken, notionPageId);
+        } else {
+          figma.ui.postMessage({ type: 'error', message: 'Please provide a product specification' });
+          break;
+        }
+
+        if (productSpec.screens.length === 0 && !productSpec.overview) {
+          figma.ui.postMessage({
+            type: 'error',
+            message: 'Could not parse any screens or content from the specification.',
+          });
+          break;
+        }
+
+        // Step 2: Generate design schema with Claude
+        figma.ui.postMessage({ type: 'loading', message: 'AI is generating design schema...' });
+        let designSchema = await generateDesignSchema(anthropicKey, productSpec, designSystemIndex);
+
+        // Step 3: Map component names to keys and validate
+        designSchema = mapComponentNamesToKeys(designSchema, designSystemIndex);
+        const validation = validateSchema(designSchema, designSystemIndex);
+
+        if (!validation.valid) {
+          figma.ui.postMessage({
+            type: 'warning',
+            message: `Some components not found: ${validation.errors.slice(0, 3).join(', ')}. Placeholders will be used.`,
+          });
+        }
+
+        // Step 4: Generate Figma nodes
+        figma.ui.postMessage({ type: 'loading', message: 'Creating design in Figma...' });
+        const result = await generateFromSchema(designSchema);
+
+        figma.ui.postMessage({
+          type: 'generation-complete',
+          result,
+          specTitle: productSpec.title,
+        });
+      } catch (error) {
+        figma.ui.postMessage({
+          type: 'error',
+          message: error instanceof Error ? error.message : 'Generation failed',
+        });
+      }
+      break;
+    }
+
+    case 'generate-test-frame': {
+      try {
+        await generateTestFrame();
+        figma.ui.postMessage({ type: 'test-frame-created' });
+      } catch (error) {
+        figma.ui.postMessage({
+          type: 'error',
+          message: error instanceof Error ? error.message : 'Failed to create test frame',
+        });
       }
       break;
     }
