@@ -952,8 +952,16 @@ figma.ui.onmessage = async (msg: { type: string; [key: string]: unknown }) => {
             status: `Reachable (HTTP ${response.status})`
           });
           console.log(`[RecapMe] ${domain.name}: HTTP ${response.status}`);
-        } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
+        } catch (error: unknown) {
+          console.error(`[RecapMe] ${domain.name} error:`, error);
+          let errorMsg = 'Unknown error';
+          if (error instanceof Error) {
+            errorMsg = error.message;
+          } else if (typeof error === 'object' && error !== null) {
+            errorMsg = JSON.stringify(error);
+          } else {
+            errorMsg = String(error);
+          }
           results.push({ name: domain.name, status: 'Failed', error: errorMsg });
           console.error(`[RecapMe] ${domain.name}: ${errorMsg}`);
         }

@@ -16,7 +16,8 @@
       "https://api.linear.app",
       "https://api.notion.com",
       "https://hooks.slack.com",
-      "https://api.anthropic.com"
+      "https://api.anthropic.com",
+      "https://*.anthropic.com"
     ]
   }
 }
