@@ -1084,12 +1084,15 @@ A simple login screen for user authentication.
             </div>
 
             <!-- Generate Button -->
-            <div style="margin-top: 20px; display: flex; gap: 8px;">
+            <div style="margin-top: 20px; display: flex; gap: 8px; flex-wrap: wrap;">
               <button id="generate-design-btn" class="btn btn-primary" onclick="generateFromSpec()">
                 Generate Design
               </button>
               <button class="btn btn-secondary btn-sm" onclick="generateTestFrame()">
                 Test Generator
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="testNetwork()">
+                Test Network
               </button>
             </div>
 
@@ -1756,6 +1759,11 @@ A simple login screen for user authentication.
       parent.postMessage({ pluginMessage: { type: 'generate-test-frame' } }, '*');
     }
 
+    function testNetwork() {
+      showLoading('Testing network connectivity...');
+      parent.postMessage({ pluginMessage: { type: 'test-network' } }, '*');
+    }
+
     // Generate recap
     function generateRecap() {
       const figmaToken = document.getElementById('figma-token').value.trim();
@@ -2096,6 +2104,28 @@ A simple login screen for user authentication.
           // Show debug info in console and optionally in UI
           console.log('[RecapMe Debug]', msg);
           showDebugInfo(msg);
+          break;
+
+        case 'network-test-result':
+          showSetup();
+          const networkResults = msg.results;
+          let html = '<div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-top: 16px;">';
+          html += '<div style="font-weight: 600; margin-bottom: 8px;">Network Test Results</div>';
+          for (const r of networkResults) {
+            const isOk = r.status.includes('Reachable');
+            const color = isOk ? 'var(--color-success)' : 'var(--color-danger)';
+            html += `<div style="font-size: 12px; margin-bottom: 4px;"><span style="color: ${color};">${isOk ? '✓' : '✗'}</span> ${r.name}: ${r.status}`;
+            if (r.error) {
+              html += ` <span style="color: var(--text-secondary);">(${r.error})</span>`;
+            }
+            html += '</div>';
+          }
+          html += '</div>';
+          const debugEl = document.getElementById('debug-output');
+          if (debugEl) {
+            debugEl.innerHTML = html;
+            debugEl.classList.remove('hidden');
+          }
           break;
       }
     };

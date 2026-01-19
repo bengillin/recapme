@@ -928,6 +928,41 @@ figma.ui.onmessage = async (msg: { type: string; [key: string]: unknown }) => {
       break;
     }
 
+    case 'test-network': {
+      // Test if we can reach the Anthropic API at all
+      console.log('[RecapMe] Testing network connectivity...');
+
+      const domains = [
+        { name: 'Figma API', url: 'https://api.figma.com/v1/me' },
+        { name: 'Anthropic API', url: 'https://api.anthropic.com/v1/messages' },
+      ];
+
+      const results: { name: string; status: string; error?: string }[] = [];
+
+      for (const domain of domains) {
+        try {
+          console.log(`[RecapMe] Testing ${domain.name}...`);
+          const response = await fetch(domain.url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}',
+          });
+          results.push({
+            name: domain.name,
+            status: `Reachable (HTTP ${response.status})`
+          });
+          console.log(`[RecapMe] ${domain.name}: HTTP ${response.status}`);
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          results.push({ name: domain.name, status: 'Failed', error: errorMsg });
+          console.error(`[RecapMe] ${domain.name}: ${errorMsg}`);
+        }
+      }
+
+      figma.ui.postMessage({ type: 'network-test-result', results });
+      break;
+    }
+
     case 'close': {
       figma.closePlugin();
       break;
